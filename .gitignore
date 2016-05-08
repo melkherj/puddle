@@ -1,3 +1,6 @@
 MNIST_DATA
 **/*.pyc
 **/*.swp
+results
+active_conf.json
+.ipynb_checkpoints
