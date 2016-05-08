@@ -1,0 +1,8 @@
+{
+    "selector_name":"random",
+    "batch_size":50,
+    "epochs":10,
+    "train_size":1000,
+    "test_size":3000,
+    "random_seed":0
+}
