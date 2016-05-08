@@ -1,4 +1,4 @@
 #!/bin/bash
 
-rm *.pyc
-rm selectors/*.pyc
+rm **/*.pyc
+rm **/.*.swp
