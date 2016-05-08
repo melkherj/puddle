@@ -4,6 +4,7 @@ import numpy as np
 import json
 from selectors_registry import selectors_registry
 import random
+from subprocess import check_output
 
 def append_results(results,filename='results/mnist'):
     # append to active_results
@@ -17,6 +18,11 @@ def load_conf(filename='active_conf.json'):
     return conf
 
 def active_evaluate(conf):
+    ################################################################################################
+    # git version
+    assert check_output(['git','diff'])=='' #repo must be clean, since we're using git hash
+    git_hash = check_output(['git','rev-parse','--short','HEAD']).strip()
+
     ################################################################################################
     # get the selector class we'll be using for active selection
     SelectorClass = selectors_registry[conf['selector_name']]
@@ -58,5 +64,6 @@ def active_evaluate(conf):
     results = conf.copy()
     results['accuracies'] = accuracies
     results['final_accuracy'] = accuracies[-1]
+    results['githash'] = git_hash
     
     return results
