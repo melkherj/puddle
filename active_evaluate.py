@@ -20,8 +20,11 @@ def load_conf(filename='active_conf.json'):
 def active_evaluate(conf):
     ################################################################################################
     # git version
-    assert check_output(['git','diff'])=='' #repo must be clean, since we're using git hash
-    git_hash = check_output(['git','rev-parse','--short','HEAD']).strip()
+    #repo must be clean, since we're using git hash
+    if check_output(['git','diff'])=='': 
+        git_hash = check_output(['git','rev-parse','--short','HEAD']).strip()
+    else:
+        git_hash = None
 
     ################################################################################################
     # get the selector class we'll be using for active selection
