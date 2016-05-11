@@ -21,10 +21,9 @@ def active_evaluate(conf):
     ################################################################################################
     # git version
     #repo must be clean, since we're using git hash
-    if check_output(['git','diff'])=='': 
-        git_hash = check_output(['git','rev-parse','--short','HEAD']).strip()
-    else:
-        git_hash = None
+    git_hash = check_output(['git','rev-parse','--short','HEAD']).strip()
+    if check_output(['git','diff'])!='':
+        git_hash += '-dirty'
 
     ################################################################################################
     # get the selector class we'll be using for active selection

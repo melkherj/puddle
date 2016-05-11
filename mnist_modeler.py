@@ -135,10 +135,11 @@ class MNISTModeler:
     def get_graphdef(self):
         return self.graph.as_graph_def()
 
-    def update_model(self,x,y):
+    def update_model(self,x,y,score_train=True):
         self.sess.run(self.train_step,
             feed_dict={self.x: x, self.y_: y, self.keep_prob: 0.5})
-        self.score_train() #model changed: keep scores up-to-date
+        if score_train:
+            self.score_train() #model changed: keep scores up-to-date
 
     def score_train(self):
         ''' Score the full training set using the current model '''
