@@ -11,6 +11,25 @@ from subprocess import check_output
 from matplotlib import pyplot as plt
 import pandas as pd
 import logging
+import math
+
+cheat = False
+
+def sigmoid(z):
+    return 1./(1.+math.exp(-z))
+
+def logodds(p):
+    return math.log(p/float(1-p))
+
+def adjust(thresh,n_pos,n_neg,gamma=0.2,lower=0.001,upper=0.999):
+    ''' thresh is current score threshold
+        ratio is ratio of negatives seen so far to positives '''
+    ratio = float(n_pos)/n_neg
+    thresh = sigmoid(logodds(thresh)-gamma*math.log(ratio))
+    return max(min(thresh,upper),lower)
+
+def add_noise(thresh,variance=0.05):
+    return sigmoid(logodds(thresh)+variance*float(np.random.randn()))
 
 # set up logger
 def setup_logging(loggername='active_semisup',logfile='active_semisup.log'):
@@ -32,8 +51,8 @@ logger = setup_logging()
 
 k_I = 80 #minibatch size (for now same for supervised/semi-supervised)
 k_semi = 20 #minibatch size (for now same for supervised/semi-supervised)
-epochs = 1000
-semisup_samples = 5
+epochs = 100
+active_samples = 5
 semisup_thresh = 0.99
 
 class M(object):
@@ -104,7 +123,12 @@ I = range(30)
 semisup = []
 random.seed(0)
 
-for _ in range(20):
+active_thresh = 0.8
+n_pos = 1
+n_neg = 1
+active_thresh_var0 = 0.5
+
+for super_epoch in range(20):
     for i in range(epochs):
         # assume uniform-predicted-category!  pick uniform number from each, so predictions are balanced
         # with replacement!
@@ -129,26 +153,49 @@ for _ in range(20):
             logger.info('epoch %d'%i)
             sys.stdout.flush()
     
-    # check performance
+    ### check performance, re-score
     logger.info('Number of labels used: %d'%len(m.Is))
     m.test_accuracy()
-    sys.stdout.flush()
-    
-    # Create semi-supervised set
     m.score_train()
-    semisup = map(int,list(np.nonzero(mnm.P.max(axis=1)>semisup_thresh)[0]))
+    sys.stdout.flush()
+    Pmax = mnm.P.max(axis=1) #useful for active/semi-supervised example selection
+
+    # Create semi-supervised indices/label set
+    semisup = map(int,list(np.nonzero(Pmax>semisup_thresh)[0]))
 
     # Add to labeled set (this is currently the cheating part)
     # randomly sample labels from incorrect semisupervised indices
     semisup_disagree = np.nonzero(m.Yp[semisup]!=m.Y[semisup])[0]
     semisup_disagree = [semisup[i] for i in semisup_disagree] 
-    logger.info('disagree score avg/std: %.3f,%.3f'%(
-            mnm.P[semisup_disagree,:].max(axis=1).mean(),
-            mnm.P[semisup_disagree,:].max(axis=1).std()))
+    if cheat:
+        active = list(np.random.choice(semisup_disagree,active_samples))
+    else:
+        # get active labels, adjust threshold
+        logger.info('active_thresh before: %.4f'%active_thresh)
+        active_thresh = adjust(active_thresh,n_pos,n_neg,gamma=0.2)
+        logger.info('active_thresh after: %.4f'%active_thresh)
+        noised_threshs = []
+        active = []
+        for _ in range(active_samples):
+            thresh_noised = add_noise(active_thresh,variance=active_thresh_var0/(super_epoch+1))
+            noised_threshs.append(thresh_noised)
+            active.append(int(np.argmin(np.abs(Pmax-thresh_noised))))
+        noised_threshs = ','.join([str(round(t,4)) for t in noised_threshs])
+        correct = m.Yp[active]==m.Y[active]
+        n_pos += sum(correct)
+        n_neg += sum(~correct)
+        logger.info('noised threshs: %s'%noised_threshs)
+        logger.info('n_pos,n_neg=%d,%d'%(n_pos,n_neg))
+    mnm.checkpoint('super_epoch_%d'%super_epoch)
+    
+    logger.info('before active/I len: %d/%d'%(len(active),len(I)))
+    I += active
+    logger.info('after active/I len: %d/%d'%(len(active),len(I)))
+    logger.info('active score avg/std: %.3f,%.3f'%(
+            mnm.P[active,:].max(axis=1).mean(),
+            mnm.P[active,:].max(axis=1).std()))
     logger.info('overall semisup score avg/std: %.3f,%.3f'%(
             mnm.P[semisup,:].max(axis=1).mean(),
             mnm.P[semisup,:].max(axis=1).std()))
     logger.info('n semisup, n semisup disagree: %d,%d'%(len(semisup),len(semisup_disagree)))
 
-    if sum(semisup_disagree)>=semisup_samples:
-        I += random.sample(semisup_disagree,semisup_samples)

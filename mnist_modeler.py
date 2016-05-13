@@ -2,6 +2,7 @@ from tensorflow.examples.tutorials.mnist import input_data
 import tensorflow as tf
 from tensorflow.python.framework import ops
 import hashlib
+import os
 
 #@author melkherj
 
@@ -40,7 +41,10 @@ def session_hash(sess):
 
 class MNISTModeler:
 
-    def __init__(self,train_n=1000,test_n=1000,seed=None):
+    def __init__(self,train_n=1000,test_n=1000,seed=None,model_path='/Users/melkherj/puddle/models'):
+        #where we store checkpointed models
+        self.model_path = model_path 
+
         #set random seed
         self.seed = seed
 
@@ -141,13 +145,27 @@ class MNISTModeler:
         if score_train:
             self.score_train() #model changed: keep scores up-to-date
 
-    def score_train(self):
+    def score_train(self,indices=None):
         ''' Score the full training set using the current model '''
-        self.P = self.sess.run(self.y_conv,
+        if indices is None:
+            tf_scores = self.y_conv
+        else:
+            tf_scores = tf.IndexedSlices(mnm.y_conv,tf.convert_to_tensor(indices))
+        self.P = self.sess.run(tf_scores,
             feed_dict={self.x: self.train_X, self.y_: self.train_Y,  self.keep_prob: 1.0})
 
     def test_accuracy(self):
         ''' accuracy of current model on the test set '''
         return self.sess.run(self.accuracy,
             feed_dict={self.x: self.test_X, self.y_: self.test_Y, self.keep_prob: 1.0})
+
+    def checkpoint(self,name):
+        filename = os.path.join(self.model_path,'sess_model_%s.ckpt'%name)
+        saver = tf.train.Saver() 
+        saver.save(self.sess,filename)
+
+    def load_checkpoint(self,name):
+        filename = os.path.join(self.model_path,'sess_model_%s.ckpt'%name)
+        saver = tf.train.Saver() 
+        saver.restore(self.sess,filename)
 
