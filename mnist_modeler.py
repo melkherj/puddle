@@ -3,6 +3,10 @@ import tensorflow as tf
 from tensorflow.python.framework import ops
 import hashlib
 import os
+from utils import session_hash,graph_hash
+import logging
+import matplotlib.pyplot as plt
+import numpy as np
 
 #@author melkherj
 
@@ -21,32 +25,15 @@ def max_pool_2x2(x):
     return tf.nn.max_pool(x, ksize=[1, 2, 2, 1],
         strides=[1, 2, 2, 1], padding='SAME')
 
-def file_md5(fname):
-    hash_md5 = hashlib.md5()
-    with open(fname, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            hash_md5.update(chunk)
-    return hash_md5.hexdigest()        
-
-def graph_hash(graphdef):
-    filename = "/tmp/temp_graph.pb"
-    tf.train.write_graph(graphdef, ".logs", filename, True)
-    return file_md5(filename)
-
-def session_hash(sess):
-    filename = '/tmp/temp_sess_model.ckpt'
-    saver = tf.train.Saver() 
-    saver.save(sess,filename)
-    return file_md5(filename)
-
 class MNISTModeler:
 
     def __init__(self,train_n=1000,test_n=1000,seed=None,model_path='/Users/melkherj/puddle/models'):
-        #where we store checkpointed models
-        self.model_path = model_path 
+        self.logger = logging.getLogger('active_semisup.modeler')
+        self.logger.info('Setting up modeler')
 
-        #set random seed
-        self.seed = seed
+        self.model_path = model_path #where we store checkpointed models
+        self.seed = seed #set random seed
+        self.all_I = [] # all labels requested to label so far
 
         # load data
         self.mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
@@ -54,6 +41,9 @@ class MNISTModeler:
         self.train_Y = self.mnist.train.labels[:train_n]
         self.test_X = self.mnist.test.images[:test_n]
         self.test_Y = self.mnist.test.labels[:test_n]
+        self.Y = np.argmax(self.train_Y,axis=1)
+        self.n,self.d = self.train_Y.shape
+        self.P = np.zeros((self.n,self.d))
         
         # define the graph
         self.initialize_graph()
@@ -61,6 +51,8 @@ class MNISTModeler:
        
         # do initial scoring
         self.score_train()
+        
+        self.logger.info('Done setting up M')
 
     def graph_hash(self):
         return graph_hash(self.get_graphdef())
@@ -139,33 +131,70 @@ class MNISTModeler:
     def get_graphdef(self):
         return self.graph.as_graph_def()
 
-    def update_model(self,x,y,score_train=True):
+    def update_model(self,I,semisup=[]):
+        ''' Given a list of labeled training indices, and semisupervised
+            training indices, update the model '''
+        self.all_I = sorted(list(set(I)|set(self.all_I))) #all indices requested to label so far
+        x = self.train_X[I+semisup]
+        # use actual labels for I, and predicted labels for semisup
+        y = np.concatenate([self.train_Y[I],self.Yp_sparse[semisup]],axis=0)
         self.sess.run(self.train_step,
             feed_dict={self.x: x, self.y_: y, self.keep_prob: 0.5})
-        if score_train:
-            self.score_train() #model changed: keep scores up-to-date
 
     def score_train(self,indices=None):
         ''' Score the full training set using the current model '''
         if indices is None:
-            tf_scores = self.y_conv
+            x = self.train_X
+            y = self.train_Y
         else:
-            tf_scores = tf.IndexedSlices(mnm.y_conv,tf.convert_to_tensor(indices))
-        self.P = self.sess.run(tf_scores,
-            feed_dict={self.x: self.train_X, self.y_: self.train_Y,  self.keep_prob: 1.0})
+            x = self.train_X[indices,:]
+            y = self.train_Y[indices,:]
+        # score just <indices>
+        p = self.sess.run(self.y_conv,feed_dict={self.x: x, self.y_:y, self.keep_prob: 1.0})
+        if indices is None:
+            scorediff = self.P - p
+            self.P = p
+        else:
+            scorediff = self.P[indices] - p
+            self.P[indices] = p
+        # make predictions.  as a vector of labels, and sparse matrix of one-hot
+        self.Yp = np.argmax(self.P,axis=1) #pick most likely label for each category
+        self.Yp_sparse = np.zeros((self.n,self.d))
+        for i,j in zip(range(self.n),self.Yp): #create a sparse representation of Yp
+            self.Yp_sparse[i,j] = 1.0
+        return float(np.mean(np.abs(scorediff))) # average score change
 
-    def test_accuracy(self):
+
+    def test_accuracy(self,indices=None):
         ''' accuracy of current model on the test set '''
-        return self.sess.run(self.accuracy,
-            feed_dict={self.x: self.test_X, self.y_: self.test_Y, self.keep_prob: 1.0})
+        if indices is None:
+            x = self.test_X
+            y = self.test_Y
+        else:
+            x = self.test_X[indices,:]
+            y = self.test_Y[indices,:]
+        accuracy = self.sess.run(self.accuracy,
+            feed_dict={self.x: x, self.y_: y, self.keep_prob: 1.0})
+        self.logger.info(
+                'with %d labels total, accuracy %.3f'%(len(self.all_I),accuracy))
+        return accuracy
+
 
     def checkpoint(self,name):
+        ''' save off the tensorflow file, using some alias '''
         filename = os.path.join(self.model_path,'sess_model_%s.ckpt'%name)
         saver = tf.train.Saver() 
         saver.save(self.sess,filename)
 
     def load_checkpoint(self,name):
+        ''' restore some checkpointed model with the given alias '''
         filename = os.path.join(self.model_path,'sess_model_%s.ckpt'%name)
         saver = tf.train.Saver() 
         saver.restore(self.sess,filename)
 
+    def viz_train(self,i):
+        ''' show info about ith example from the trainin set, with model predictions etc '''
+        x = self.train_X[i,:]
+        self.logger.info('index: %d,label: %d, predicted: %d'%(i,self.Y[i],self.Yp[i]))
+        plt.imshow(x.reshape(28,28), interpolation='nearest',cmap='Greys')
+        plt.show()
