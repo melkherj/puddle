@@ -77,14 +77,39 @@ lorem ipsum
 In this section, we introduce an oracle abstraction for a class of active pool-based semi-supervised learning algorithms, and a few classes of algorithms to interface with such an oracle.  
 
 \subsection{A Simple Active Semi-Supervised Oracle}
+In this section we lay out a simple, flexible framework for gradient-based active-semisupervised learning algorithms.  
+
+
 
 $$x \in \mathbb{R}^d$$
 
 
+
+adaptive calibration for semi-supervised active learning 
+
+
+\begin{verbatim}
+
+SECTIONS (6 pages to start, I'm sure there will be more):
+- title/abstract
+- 1 intro:
+    - what are some prior approaches to semisup?  active?  how is what we're doing novel in a nutshell?
+- 2 A simple, flexible framework for semi-supervised active learning
+- 3 Implementations that work well
+- 4 Theoretical justification
+- 5 Experiments
+    - performance evaluation, setup, the specific deep network structure/topology, 
+        
+- Discussion
+
+Key contributions:
+- model agnostic.  Especially important for deep learning.  
+- calibration
+- labeling all performs strictly worse
+
 plots:
 semisupervised threshold vs. accuracy plots (significant)
 significant difference between "incorrect & correct"
-
 
 KEY FACTS: 
 - massive difference in "predicted correctly" vs. not
@@ -96,11 +121,9 @@ active metric is a combo of:
 compare to uncertainty-sampling:
 - just a function of score-value (0.9, ...)
 
+
 class skew (downsample training?)  keep accuracy as our metric
-
-
-
-
+\end{verbatim}
 
 
 

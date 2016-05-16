@@ -10,6 +10,7 @@ from subprocess import check_output
 import logging
 from utils import setup_logging,adjust_freq_sample,add_noise
 import time
+from collections import Counter
 
 def append_results(results,filename='results/mnist'):
     # append to active_results
@@ -60,6 +61,9 @@ def active_evaluate(conf):
         Pmax = mnm.P.max(axis=1)
 
         n_labeled_correct = sum(mnm.Yp[I_next]==mnm.Y[I_next]) if len(I_next)>0 else None
+        logger.info('label dist:'+str(sorted(
+            Counter(mnm.Y[I]).items()
+            )))
         labeled_score = float(Pmax[I_next].mean()) if len(I_next)>0 else None
         score_ixs = random.sample(range(conf['train_size']),conf['n_rescore'])
         scorediff = mnm.score_train(indices=np.array(score_ixs))
