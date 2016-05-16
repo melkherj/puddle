@@ -9,10 +9,12 @@ class Selector(object):
         - if so, & given scores, what examples to view 
         percentiles indicates whether we first transform scores to percentiles '''
 
-    def __init__(self,n_ixs=1,seed=None):
+    def __init__(self,n_ixs=1,seed=None,conf={}):
         self.n_ixs=n_ixs
         self.seed = seed
+        self.conf = conf
         random.seed(self.seed)
+        np.random.seed(self.seed)
 
     def next_indices(self,Y,state,modeler):
         ''' Return a list of indices giving examples to be displayed '''

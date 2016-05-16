@@ -21,10 +21,10 @@ def sigmoid(z):
 def logodds(p):
     return math.log(p/float(1-p))
 
-def adjust(thresh,n_pos,n_neg,gamma=0.2,lower=0.001,upper=0.999):
+def adjust(thresh,n_pos,n_neg,p=0.5,gamma=0.2,lower=0.001,upper=0.999):
     ''' thresh is current score threshold
         ratio is ratio of negatives seen so far to positives '''
-    ratio = float(n_pos)/n_neg
+    ratio = float(n_pos)/n_neg*(1-p)/p
     thresh = sigmoid(logodds(thresh)-gamma*math.log(ratio))
     return max(min(thresh,upper),lower)
 
