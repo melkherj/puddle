@@ -31,24 +31,27 @@ class MaxSelector(Selector):
         beta = 4.80
         p_active = 0.99-np.exp(-alpha*(k+5+beta)) #1. - 1./((k+10.)**0.5)
         p_semisup = 0.99-np.exp(-alpha*(k+50+beta)) #sigmoid(logodds(p_active)+0.5)
-        active_thresh = Pmax[int(p_active*n)]
+        #active_thresh = Pmax[int(p_active*n)]
+        active_thresh = self.thresh
         active = [int(np.argmin(np.abs(Pmax-
-                        add_noise(self.thresh,
+                        add_noise(active_thresh,
                         variance=1.5*math.exp(-0.027*k)))))
                     for t in range(n_ixs)]
 
-        if False: #len(state_T)>=30 and len(active)>0: #start doing active at around 30?
+        #print p_semisup,n,p_active 
+        #self.logger.info("%.3f active %d semisup"%(p_active,int(p_semisup*n)))
+        if len(active)>0: #start doing active at around 30?
             n_pos_next = sum(modeler.Yp[active]==modeler.Y[active])
-            n_neg_next += sum(modeler.Yp[active]!=modeler.Y[active])
+            n_neg_next = sum(modeler.Yp[active]!=modeler.Y[active])
             self.n_pos += n_pos_next
             self.n_neg += n_neg_next
-            decay = conf['active_decay']
+            decay = self.conf['active_decay']
             self.exp_n_pos = self.exp_n_pos*decay + (1-decay)*n_pos_next
             self.exp_n_neg = self.exp_n_neg*decay + (1-decay)*n_neg_next
             self.logger.info('thresh1: %d,%d-%d,%d-%.3f'%(self.n_pos,self.n_neg,
                 self.exp_n_pos,self.exp_n_neg,self.thresh))
             self.thresh = adjust(self.thresh,n_pos=self.exp_n_pos,n_neg=self.exp_n_neg,
-                p=self.conf['active_thresh'])
+                    p=self.conf['active_thresh'])
             self.logger.info('thresh2: %d,%d-%d,%d-%.3f'%(self.n_pos,self.n_neg,
                 self.exp_n_pos,self.exp_n_neg,self.thresh))
         if semisupervised:
