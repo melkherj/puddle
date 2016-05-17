@@ -41,12 +41,11 @@ def active_evaluate(conf):
     
     ################################################################################################
     # get variables needed for active learning system
-    mnm = MNISTModeler(train_n=conf['train_size'],test_n=conf['test_size'],
-            seed=conf['random_seed'])
+    mnm = MNISTModeler(seed=conf['random_seed'])
     selector = SelectorClass(conf=conf['selector'],n_ixs=conf['batch_size'],seed=conf['random_seed'])
     state = []
-    Y = np.ones(len(mnm.train_Y))*-1
-    I = random.sample(range(conf['train_size']),conf['initial_random_training']) #start off w/30
+    Y = np.ones(len(mnm.Y_train))*-1
+    I = random.sample(range(mnm.n),conf['initial_random_training']) #start off w/30
     exp_accuracy = 0.0 #exponentially decaying weighted accuracy, with factor conf['accuracy_gamma']
     epoch_stats = []
     
@@ -65,10 +64,10 @@ def active_evaluate(conf):
             Counter(mnm.Y[I]).items()
             )))
         labeled_score = float(Pmax[I_next].mean()) if len(I_next)>0 else None
-        score_ixs = random.sample(range(conf['train_size']),conf['n_rescore'])
+        score_ixs = random.sample(range(mnm.n),conf['n_rescore'])
         scorediff = mnm.score_train(indices=np.array(score_ixs))
         # label/set state
-        for ix,label_row in zip(I_next,mnm.train_Y[I_next]):
+        for ix,label_row in zip(I_next,mnm.Y_train[I_next]):
             y_label = int(np.nonzero(label_row)[0][0])
             state.append((ix,y_label))
             Y[ix] = y_label
@@ -77,16 +76,19 @@ def active_evaluate(conf):
         # now bootstrap sample from semi/active, uniform probability across categories
         #numbers of active/semisupervised to bootstrap sample for this iteration
         I_labels = mnm.Y[I] 
-        semisup_labels = mnm.Yp[semisup]
         I_samples = adjust_freq_sample(I,I_labels,[1]*mnm.d,conf['minibatch_labeled'])
-        semisup_samples = adjust_freq_sample(semisup,semisup_labels,[1]*mnm.d,conf['minibatch_semisup'])
+        if conf['selector']['name']=='max':
+            semisup_labels = mnm.Yp[semisup]
+            semisup_samples = adjust_freq_sample(semisup,semisup_labels,[1]*mnm.d,conf['minibatch_semisup'])
+        elif conf['selector']['name']=='random':
+            semisup_samples = []
     
         #        len(I_samples),len(semisup_samples)))
         mnm.update_model(I_samples,semisup=semisup_samples)
         # evaluate accuracy
         if epoch % conf['accuracy_epochs']==0:
             accuracy = float(mnm.test_accuracy(
-                indices=random.sample(range(conf['test_size']),conf['n_accuracy'])))
+                indices=random.sample(range(mnm.n_test),conf['n_accuracy'])))
         exp_accuracy = conf['accuracy_gamma']*accuracy+ (1-conf['accuracy_gamma'])*exp_accuracy
         s = 'batch %d: accuracy/exp-weighted/scorediff/n-labeled/n-semisupervised\n'%(epoch)
         s += '    %.3f/%.3f/%.3f/%d/%d\n'%(accuracy,exp_accuracy,scorediff,len(I),len(semisup))

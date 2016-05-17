@@ -73,13 +73,50 @@
 lorem ipsum
 \end{abstract}
 
+\section{Introduction}
+
+
 \section{Minibatch Active Semi-supervised Learning}
 In this section, we introduce an oracle abstraction for a class of active pool-based semi-supervised learning algorithms, and a few classes of algorithms to interface with such an oracle.  
 
 \subsection{A Simple Active Semi-Supervised Oracle}
-In this section we lay out a simple, flexible framework for gradient-based active-semisupervised learning algorithms.  
+Here we define an oracle setup in which to implement our active, semi-supervised learning algorithm.  We assume that we're given a pool of inputs, each $x \in \mathbb{R}^{d}$, and can request labels each $y\in\{0..c\}$.  As active learning frameworks are typically structured, the dual objectives are to train and optimize some objective over the population dataset, while minimizing the number of labels requested.  
+
+In keeping this learning algorithm simple, we restrict it to run as follows.  The algorithm must run as a sequence of epochs.  In each epoch, the algorithm:
+\begin{enumerate}
+\item Produces a set of examples to request labels for
+\item Produces a set of example/label pairs from model would output with sufficient confidence
+\item Bootstrap samples a minibatch from the semisupervised pseudo-labels and active labels collected so far.
+\item Re-scores a small, random subset of examples
+\end{enumerate}
+
+This approach then strikes a balance between pool-based and streaming active learning algorithms.  As is normally the case, if we assume scoring / retraing makes up the bulk of runtime for iterative learning algorithms.  From the approach above, each epoch only need score a small sample, re-train on a minibatch, and label a few cases.  Ensuring latency of requesting the next label is often important for collecting labels in real-time labels.  
+
+\subsection{Deep Architecture}
+The point of this approach is for the example selection and semi-supervised labeling to be agnostic to the supervised model architecture chosen.  For evaluation on MNIST we thus chose a commonly used architecture.  The 28x28 input images are fed into a 32-bank of 5x5 convolutional features, rectified linear and 2x2 max pooling layers, then 5x5x32 convolution with 32 features, relu/max pooling, and finally a 2-level fully connected network with a 1014-variable hidden layer.  
+
+\subsection{A Specification of the Active Learning Algorithm}
+The active learning algorithm we use is given 
+For the active-label selection, we show 
+
+\subsection{A Full Algorithm for Minibatch Active Semi-Supervised Learning}
+
+What was 
 
 
+Given this framework, what is left for 
+
+The above framework supports a
+While the above framework does restrict the learning algorithm and implementation
+The restrictions on our learning algorithm are only then that it can be efficiently trained in mini-batches, 
+
+it has sufficient confidence in to use for semi-supervised learning
+objective is to simultaneously minimize the number of labels request
+we s with any active learning algorithm, the objective is to 
+
+FUPS: 
+- theoretical work on this adaptive calibration algorithm
+- deadling with unbalanced sets
 
 $$x \in \mathbb{R}^d$$
 
@@ -89,6 +126,11 @@ Online Calibration for Semi-Supervised Active Learning
 
 
 \begin{verbatim}
+
+THE NOVELTY:
+- reducing pool-based active/semi-supervised learning to a thresholding/selection framework (compare to random)
+- algorithms for effectively doing this
+- the algorithm re-trains adaptively with examples coming in, training on the pool efficiently
 
 SECTIONS (6 pages to start, I'm sure there will be more):
 - title/abstract

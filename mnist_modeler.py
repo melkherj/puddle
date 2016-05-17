@@ -1,4 +1,3 @@
-from tensorflow.examples.tutorials.mnist import input_data
 import tensorflow as tf
 from tensorflow.python.framework import ops
 import hashlib
@@ -7,6 +6,7 @@ from utils import session_hash,graph_hash
 import logging
 import matplotlib.pyplot as plt
 import numpy as np
+from load_mnist import load_mnist
 
 #@author melkherj
 
@@ -27,7 +27,7 @@ def max_pool_2x2(x):
 
 class MNISTModeler:
 
-    def __init__(self,train_n=1000,test_n=1000,seed=None,model_path='/Users/melkherj/puddle/models'):
+    def __init__(self,seed=None,model_path='/Users/melkherj/puddle/models'):
         self.logger = logging.getLogger('active_semisup.modeler')
         self.logger.info('Setting up modeler')
 
@@ -36,14 +36,13 @@ class MNISTModeler:
         self.all_I = [] # all labels requested to label so far
 
         # load data
-        self.mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
-        self.train_X = self.mnist.train.images[:train_n]
-        self.train_Y = self.mnist.train.labels[:train_n]
-        self.test_X = self.mnist.test.images[:test_n]
-        self.test_Y = self.mnist.test.labels[:test_n]
-        self.Y = np.argmax(self.train_Y,axis=1)
-        self.n,self.d = self.train_Y.shape
+        self.X_train,self.Y_train,self.X_test,self.Y_test = load_mnist([3,5])
+        self.Y = np.argmax(self.Y_train,axis=1)
+        self.d_in = self.X_train.shape[1] #size of input example vectors
+        self.n,self.d = self.Y_train.shape
+        self.n_test = self.Y_test.shape[0]
         self.P = np.zeros((self.n,self.d))
+        self.logger.info("train %dx%d test %dx%d"%(self.n,self.d,self.n_test,self.d))
         
         # define the graph
         self.initialize_graph()
@@ -71,7 +70,7 @@ class MNISTModeler:
     def define_network(self):
         # inputs
         self.x = tf.placeholder(tf.float32, shape=[None, 784])
-        self.y_ = tf.placeholder(tf.float32, shape=[None, 10])
+        self.y_ = tf.placeholder(tf.float32, shape=[None, self.d])
         
         W_conv1 = weight_variable([5, 5, 1, 32],seed=self.seed)
         b_conv1 = bias_variable([32])
@@ -96,8 +95,8 @@ class MNISTModeler:
         self.keep_prob = tf.placeholder(tf.float32)
         h_fc1_drop = tf.nn.dropout(h_fc1, self.keep_prob,seed=self.seed)
 
-        W_fc2 = weight_variable([1024, 10],seed=self.seed)
-        b_fc2 = bias_variable([10])
+        W_fc2 = weight_variable([1024, self.d],seed=self.seed)
+        b_fc2 = bias_variable([self.d])
         self.y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2,name='y_conv')
 
     def define_eval(self):
@@ -135,20 +134,20 @@ class MNISTModeler:
         ''' Given a list of labeled training indices, and semisupervised
             training indices, update the model '''
         self.all_I = sorted(list(set(I)|set(self.all_I))) #all indices requested to label so far
-        x = self.train_X[I+semisup]
+        x = self.X_train[I+semisup]
         # use actual labels for I, and predicted labels for semisup
-        y = np.concatenate([self.train_Y[I],self.Yp_sparse[semisup]],axis=0)
+        y = np.concatenate([self.Y_train[I],self.Yp_sparse[semisup]],axis=0)
         self.sess.run(self.train_step,
             feed_dict={self.x: x, self.y_: y, self.keep_prob: 0.5})
 
     def score_train(self,indices=None):
         ''' Score the full training set using the current model '''
         if indices is None:
-            x = self.train_X
-            y = self.train_Y
+            x = self.X_train
+            y = self.Y_train
         else:
-            x = self.train_X[indices,:]
-            y = self.train_Y[indices,:]
+            x = self.X_train[indices,:]
+            y = self.Y_train[indices,:]
         # score just <indices>
         p = self.sess.run(self.y_conv,feed_dict={self.x: x, self.y_:y, self.keep_prob: 1.0})
         if indices is None:
@@ -168,11 +167,11 @@ class MNISTModeler:
     def test_accuracy(self,indices=None):
         ''' accuracy of current model on the test set '''
         if indices is None:
-            x = self.test_X
-            y = self.test_Y
+            x = self.X_test
+            y = self.Y_test
         else:
-            x = self.test_X[indices,:]
-            y = self.test_Y[indices,:]
+            x = self.X_test[indices,:]
+            y = self.Y_test[indices,:]
         accuracy = self.sess.run(self.accuracy,
             feed_dict={self.x: x, self.y_: y, self.keep_prob: 1.0})
         self.logger.info(
@@ -194,7 +193,7 @@ class MNISTModeler:
 
     def viz_train(self,i):
         ''' show info about ith example from the trainin set, with model predictions etc '''
-        x = self.train_X[i,:]
+        x = self.X_train[i,:]
         self.logger.info('index: %d,label: %d, predicted: %d'%(i,self.Y[i],self.Yp[i]))
         plt.imshow(x.reshape(28,28), interpolation='nearest',cmap='Greys')
         plt.show()
