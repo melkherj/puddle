@@ -4,9 +4,12 @@ import random
 
 # run some selector, see what performance is like, append to the results file
 conf = load_conf()
+conf['random_seed'] = 0
+#for semisup_selector in ['random','top']
+#for active_selector in ['adaptive','random']:
+#    conf['active_selector']['name'] = active_selector
+    
 for i in range(1000):
-    conf['random_seed'] = i
-    conf['selector']['active_thresh'] = 0.2*random.random()+0.6 #0.2->0.8
     results = active_evaluate(conf)
     append_results(results)
 

@@ -42,6 +42,7 @@ class MNISTModeler:
         self.n,self.d = self.Y_train.shape
         self.n_test = self.Y_test.shape[0]
         self.P = np.zeros((self.n,self.d))
+        self.Pmax = np.zeros((self.n,))
         self.logger.info("train %dx%d test %dx%d"%(self.n,self.d,self.n_test,self.d))
         
         # define the graph
@@ -161,6 +162,7 @@ class MNISTModeler:
         self.Yp_sparse = np.zeros((self.n,self.d))
         for i,j in zip(range(self.n),self.Yp): #create a sparse representation of Yp
             self.Yp_sparse[i,j] = 1.0
+        self.Pmax = self.P.max(axis=1)
         return float(np.mean(np.abs(scorediff))) # average score change
 
 

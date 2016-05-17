@@ -36,13 +36,15 @@ def active_evaluate(conf):
         git_hash += '-dirty'
     
     ################################################################################################
-    # get the selector class we'll be using for active selection
-    SelectorClass = selectors_registry[conf['selector']['name']]
+    # get the selector classes we'll be using for active selection
+    ActiveSelectorClass = selectors_registry[conf['active_selector']['name']]
+    SemisupSelectorClass = selectors_registry[conf['semisup_selector']['name']]
     
     ################################################################################################
     # get variables needed for active learning system
     mnm = MNISTModeler(seed=conf['random_seed'])
-    selector = SelectorClass(conf=conf['selector'],n_ixs=conf['batch_size'],seed=conf['random_seed'])
+    active_selector = ActiveSelectorClass(conf=conf['active_selector'],seed=conf['random_seed'])
+    semisup_selector = SemisupSelectorClass(conf=conf['semisup_selector'],seed=conf['random_seed'])
     state = []
     Y = np.ones(len(mnm.Y_train))*-1
     I = random.sample(range(mnm.n),conf['initial_random_training']) #start off w/30
@@ -55,15 +57,22 @@ def active_evaluate(conf):
         epoch_start_time = time.time()
         # get next indices
         n_ixs = int(random.random()<conf['active_label_prob']) #1 active label with probability 0.1
-        I_next,semisup = selector.next_indices(Y,state,mnm,n_ixs=n_ixs,semisupervised=True)
+        I_next = active_selector.next_indices(Y,state,mnm,n_ixs=n_ixs)
+
+        # Get semisupervised indices 
+        alpha = 0.022
+        beta = 4.80
+        p_semisup = 0.99-np.exp(-alpha*(len(I)+50+beta))
+        semisup = semisup_selector.next_indices(Y,state,mnm,n_ixs=int(p_semisup*mnm.n))
+
+        # get full label set so far
         I = sorted(list(set(I)|set(I_next))) #distinct add I_next
-        Pmax = mnm.P.max(axis=1)
 
         n_labeled_correct = sum(mnm.Yp[I_next]==mnm.Y[I_next]) if len(I_next)>0 else None
         logger.info('label dist:'+str(sorted(
             Counter(mnm.Y[I]).items()
             )))
-        labeled_score = float(Pmax[I_next].mean()) if len(I_next)>0 else None
+        labeled_score = float(mnm.Pmax[I_next].mean()) if len(I_next)>0 else None
         score_ixs = random.sample(range(mnm.n),conf['n_rescore'])
         scorediff = mnm.score_train(indices=np.array(score_ixs))
         # label/set state
@@ -77,13 +86,9 @@ def active_evaluate(conf):
         #numbers of active/semisupervised to bootstrap sample for this iteration
         I_labels = mnm.Y[I] 
         I_samples = adjust_freq_sample(I,I_labels,[1]*mnm.d,conf['minibatch_labeled'])
-        if conf['selector']['name']=='max':
-            semisup_labels = mnm.Yp[semisup]
-            semisup_samples = adjust_freq_sample(semisup,semisup_labels,[1]*mnm.d,conf['minibatch_semisup'])
-        elif conf['selector']['name']=='random':
-            semisup_samples = []
+        semisup_labels = mnm.Yp[semisup]
+        semisup_samples = adjust_freq_sample(semisup,semisup_labels,[1]*mnm.d,conf['minibatch_semisup'])
     
-        #        len(I_samples),len(semisup_samples)))
         mnm.update_model(I_samples,semisup=semisup_samples)
         # evaluate accuracy
         if epoch % conf['accuracy_epochs']==0:
