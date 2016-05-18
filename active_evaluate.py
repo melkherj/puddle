@@ -8,7 +8,7 @@ from selectors_registry import selectors_registry
 import random
 from subprocess import check_output
 import logging
-from utils import setup_logging,adjust_freq_sample,add_noise
+from utils import setup_logging,adjust_freq_sample,add_noise,logodds,sigmoid
 import time
 from collections import Counter
 
@@ -60,10 +60,11 @@ def active_evaluate(conf):
         I_next = active_selector.next_indices(Y,state,mnm,n_ixs=n_ixs)
 
         # Get semisupervised indices 
-        alpha = 0.022
-        beta = 4.80
-        p_semisup = 0.99-np.exp(-alpha*(len(I)+50+beta))
-        semisup = semisup_selector.next_indices(Y,state,mnm,n_ixs=int(p_semisup*mnm.n))
+        #alpha = 0.022
+        #beta = 4.80
+        #p_semisup = 0.99-np.exp(-alpha*(len(I)+50+beta))
+        n_semisup = sum(mnm.Pmax>sigmoid(logodds(active_selector.thresh)+2.0))
+        semisup = semisup_selector.next_indices(Y,state,mnm,n_ixs=n_semisup)
 
         # get full label set so far
         I = sorted(list(set(I)|set(I_next))) #distinct add I_next
@@ -73,7 +74,7 @@ def active_evaluate(conf):
             Counter(mnm.Y[I]).items()
             )))
         labeled_score = float(mnm.Pmax[I_next].mean()) if len(I_next)>0 else None
-        score_ixs = random.sample(range(mnm.n),conf['n_rescore'])
+        score_ixs = random.sample(range(mnm.n),int(mnm.n*conf['frac_rescore']))
         scorediff = mnm.score_train(indices=np.array(score_ixs))
         # label/set state
         for ix,label_row in zip(I_next,mnm.Y_train[I_next]):

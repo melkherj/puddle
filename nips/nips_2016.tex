@@ -72,13 +72,15 @@
 \maketitle
 
 \begin{abstract}
-lorem ipsum
+In this paper we lay out a simple, model-agnostic and computationally efficient framework for semi-supervised active learning.  The algorithm assumes only access to a model minibatch-fit and scoring oracle, efficiently scores samples, and runs semi-supervised active learning on small incremental mini-batches.  We show results that are state of the art on 10-class-MNIST: 89.5\% accuracy at 85 labels, and 92.5\% held-out accuracy at 150 labels.  
 \end{abstract}
 
 \section{Introduction}
+
+
 \begin{algorithm}
-\caption{Calculate $y = x^n$}
-\begin{algorithmic} 
+\caption{}
+\begin{algorithmic}
 \REQUIRE $n \geq 0 \vee x \neq 0$
 \ENSURE $y = x^n$
 \STATE $y \leftarrow 1$
@@ -154,6 +156,8 @@ Online Calibration for Semi-Supervised Active Learning
 \begin{verbatim}
 
 
+
+fraction to score = 1-(frac to miss)^expected num iters
 
 NOTICE: our approach is incredibly computationally-efficent (minibatch incremental over pool, vs. O(n) in memory or O(n^2).  such an approch is necessary), simple, and achieves superior performance.  
 Naive methods achieve very poor calibration.  We use a label-efficient adaptive calibration algorithm, and a reformulation of pseudo-labeling to achieve state-of-the-art results on image and text classification benchmarks.  

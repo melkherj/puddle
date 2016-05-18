@@ -24,6 +24,7 @@ class TopSelector(Selector):
         n = len(Y)
 
         #fraction that should be semisup at this number of labels
-        semisup = np.argsort(modeler.Pmax)[-n_ixs:]
+        #semisup = np.argsort(modeler.Pmax)[-n_ixs:]
+        semisup = np.nonzero(modeler.Pmax>0.97)[0] #argsort(modeler.Pmax)[-n_ixs:]
         semisup = map(int,semisup)
         return semisup
