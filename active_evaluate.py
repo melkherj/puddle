@@ -42,7 +42,7 @@ def active_evaluate(conf):
     
     ################################################################################################
     # get variables needed for active learning system
-    mnm = MNISTModeler(seed=conf['random_seed'])
+    mnm = MNISTModeler(seed=conf['random_seed'],conf=conf['dataset'])
     active_selector = ActiveSelectorClass(conf=conf['active_selector'],seed=conf['random_seed'])
     semisup_selector = SemisupSelectorClass(conf=conf['semisup_selector'],seed=conf['random_seed'])
     state = []

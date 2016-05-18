@@ -20,8 +20,10 @@
 \usepackage{amsfonts}       % blackboard math symbols
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
 \usepackage{microtype}      % microtypography
+\usepackage{algorithm}
+\usepackage{algorithmic}
 
-\title{Pool-based Active Semi-supervised Learning}
+\title{Sequential, Pool-based Semi-supervised Active Learning}
 
 % The \author macro works with any number of authors. There are two
 % commands used to separate the names and addresses of multiple
@@ -74,7 +76,30 @@ lorem ipsum
 \end{abstract}
 
 \section{Introduction}
-
+\begin{algorithm}
+\caption{Calculate $y = x^n$}
+\begin{algorithmic} 
+\REQUIRE $n \geq 0 \vee x \neq 0$
+\ENSURE $y = x^n$
+\STATE $y \leftarrow 1$
+\IF{$n < 0$}
+\STATE $X \leftarrow 1 / x$
+\STATE $N \leftarrow -n$
+\ELSE
+\STATE $X \leftarrow x$
+\STATE $N \leftarrow n$
+\ENDIF
+\WHILE{$N \neq 0$}
+\IF{$N$ is even}
+\STATE $X \leftarrow X \times X$
+\STATE $N \leftarrow N / 2$
+\ELSE[$N$ is odd]
+\STATE $y \leftarrow y \times X$
+\STATE $N \leftarrow N - 1$
+\ENDIF
+\ENDWHILE
+\end{algorithmic}
+\end{algorithm}
 
 \section{Minibatch Active Semi-supervised Learning}
 In this section, we introduce an oracle abstraction for a class of active pool-based semi-supervised learning algorithms, and a few classes of algorithms to interface with such an oracle.  
@@ -127,6 +152,11 @@ Online Calibration for Semi-Supervised Active Learning
 
 
 \begin{verbatim}
+
+
+
+NOTICE: our approach is incredibly computationally-efficent (minibatch incremental over pool, vs. O(n) in memory or O(n^2).  such an approch is necessary), simple, and achieves superior performance.  
+Naive methods achieve very poor calibration.  We use a label-efficient adaptive calibration algorithm, and a reformulation of pseudo-labeling to achieve state-of-the-art results on image and text classification benchmarks.  
 
 THE NOVELTY:
 - reducing pool-based active/semi-supervised learning to a thresholding/selection framework (compare to random)

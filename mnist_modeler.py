@@ -27,16 +27,18 @@ def max_pool_2x2(x):
 
 class MNISTModeler:
 
-    def __init__(self,seed=None,model_path='/Users/melkherj/puddle/models'):
+    def __init__(self,seed=None,model_path='/Users/melkherj/puddle/models',
+            conf={}):
         self.logger = logging.getLogger('active_semisup.modeler')
         self.logger.info('Setting up modeler')
 
         self.model_path = model_path #where we store checkpointed models
         self.seed = seed #set random seed
         self.all_I = [] # all labels requested to label so far
+        self.conf = conf
 
         # load data
-        self.X_train,self.Y_train,self.X_test,self.Y_test = load_mnist([3,5])
+        self.X_train,self.Y_train,self.X_test,self.Y_test = load_mnist(self.conf['categories'])
         self.Y = np.argmax(self.Y_train,axis=1)
         self.d_in = self.X_train.shape[1] #size of input example vectors
         self.n,self.d = self.Y_train.shape
