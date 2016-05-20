@@ -27,7 +27,7 @@
 
 \graphicspath{ {images/} }
 
-\title{Sequential, Pool-based Semi-supervised Active Learning}
+\title{Active Calibration for Mini-Batch Semi-Supervised Learning}
 
 % The \author macro works with any number of authors. There are two
 % commands used to separate the names and addresses of multiple
@@ -76,46 +76,50 @@
 \maketitle
 
 \begin{abstract}
-In this paper we lay out a model-agnostic and computationally efficient framework for semi-supervised active learning.  The algorithm assumes only access to a model minibatch-fit and scoring oracle, efficiently scores samples, and runs semi-supervised active learning incrementally on mini-batches.  We achieve empirical results that are state of the art on 10-class-MNIST: 89.5\% held-out accuracy with 85 labels, and 92.5\% with 150 labels.  
+In this paper we lay out a model-agnostic and computationally efficient framework for semi-supervised active learning.  The algorithm discussed assumes only access to a minibatch-fit and scoring oracle, efficiently scores samples, and runs semi-supervised active learning incrementally.  By combining pseudo-labeling with a novel adaptive calibration algorithm, we achieve empirical results that are state of the art on 10-class-MNIST: 89.5\% held-out accuracy with 85 labels, and 92.5\% with 150 labels.  
 \end{abstract}
 
 \section{Introduction}
-While there have been great strides in supervised classification problems in text, speech, and audio, recent deep-learning approaches typically require thousands or tens of thousands of labeled examples to achive state-of-the-art performance.  Due to the substantial investment required in collecting such a set of labels, the set of problems tackled in industry are those large enough to justify the cost.  Any simple techniques that can decrease this labeling cost would thus significantly increase the breadth of supervised machine-learning applications currently tackled.  
+While there have been great strides in supervised classification problems in text, speech, and audio, recent deep-learning approaches typically require thousands to tens or hundreds of thousands of labeled examples to achive state-of-the-art performance.  Due to the substantial investment required in collecting such sets of labels, the set of problems tackled in industry are only those large enough to justify the cost.  Any simple techniques that can decrease this labeling cost would thus significantly increase the breadth of supervised machine-learning applications currently tackled.  
 
-This is one of the primary motivators for the machine-learning subfields of active, semi-supervised, and transfer learning.  The field of transfer-learning uses a model trained on one dataset, to bootstrap a model on another[9][10].  Semi-supervised learning seeks to extract patterns from examples that aren't labeled, and use those patterns discovered to improve performance on labeled examples.  Finally, active learning decreases the number of labels used by intelligently selecting examples to label.  
+This is one of the primary motivators for the machine-learning subfields of active, semi-supervised, and transfer learning.  The field of transfer-learning uses a model trained on one dataset to bootstrap a model on another[9][10].  Semi-supervised learning seeks to extract patterns from examples that aren't labeled, and use those patterns discovered to improve performance on labeled examples.  Finally, active learning decreases the number of labels used by intelligently selecting examples to label.  We focus on current techniques in scalable, model-agnostic semi-supervised and active-learning, point out deficiencies and areas for work, then outline our approach that combines new techniques.  We'll then focus on the details of the active and semi-supervised techniques used, an algorithm detailing this interaction, and the results of experiments.  
 
-A few classes of semi-supervised learning approaches include graph methods, clustering, and probabilistic/density-based sampling[8][6].  These methods generally require deep model introspection, modeling assumptions, or the creation of an $O(n^2)$ similarity-matrix.  Graph-based methods utilitize a similarity matrix, constructed via domain-knowledge or a model.  Methods utilizing probabilistic graphical models assume data follows that particular distribution.  
+The field of semi-supervised learning is a relatively old and well-trodden field, with techniques ranging from the broadly applicable to the more-often model-specific.  A few classes of semi-supervised learning approaches include graph methods, clustering, probabilistic models/EM, self/co-training, and density-avoiding-methods[8][6].  
 
-Active learning algorithms .  We chose to focus on pool-based active learning.  
+Graph methods like label propagation, min-cut, and conjugate gradient generally operate on a similarity matrix.  In some cases this can be a sparse kNN-similarity-matrix, but the most straightforward techniques can require the construction of a dense matrix, and take total complexity $O(n^3)$.  There are techniques that potentially bring this down to $O(n)$ for sparse graphs, but these still require some specification of a model-specific similarity function[12].  
 
-We present an algorithm that 
-Active learning as well falls into 
-Modern semi-supervised learning approaches generally fall into 
-Some of the most commonly-used classes algorithms for semi-supervised learning are 
-Semi-supervised algorithms
-<common semisupervised learning techniques>
-<common active learning techniques>  <why pool over active>
-<fully describe why our result is radically different from the above, why we aim at semi-supervised and active>
-We give a model-agnostic algorithm that achieves state-of-the-art results, 
+We focus instead on variants of semi-supervised techniques that are simpler, more scalable and model-agnostic.  These include probabilistic models over scores/EM, and self-training/pseudo-labeling.  Self-training and pseudo-labeling get closest to the objective we're looking to hit[11][1], and can be thought of as a hard (binarized) version of probabilistic/EM methods.  
+
+Self-training generally starts with ground-truth labeled sets, trains a model, and produces pseudo-labels to re-train on.  Model-agnostic variants of EM operate in a similar manner, producing scores instead of hard labelings.  The technique of pseudo-labeling is quite simple in implementation, but can results in substantial empirical gains can be thought of as solving more complex implicit optimization problems.
+
+While striking a balance of simplicty and performance, these techniques aren't without their drawbacks.  One problem with self-training/pseudo-labeling is in determining the set of examples to pseudo-label, and how these trade off with real labels in optimizing an objective.  The scheduling of labeling, pseudo-label-fitting, and scoring is also non-trivial.  Naive approaches are computationally inefficient (score every iteration).  A naive score-cutoff can as well produce more noise that out-weights the additional structured signal.  We use adaptive/active labeling to help outline this boundary, and more efficiently adjust scores / train the model.  We as well outline a specific mini-batch scheduling of active labeling, pseudo-labeling, and scoring that empirically performs well.   
+
+To find this score cutoff, we find ourselves in another area of research focused on label-efficiency: active learning[13].  The techniques here as well have typically required in-depth access to model information or complex model schedule-training[14], but some can be model-agnostic[15].   
+
+In tackling semi-supervised and active techniques simultaneously, we as well need consider techniques that solve for both score calibration and information gain.  We apply simple strategies to mitigate the common problem of bias: balanced-minibatch-sampling and the addition of sampling noise, and demonstrate that the same dynamic thresholding used for active sampling can carry over to pseudo-labeling.  
+We choose to focus on pool-based active learning over streaming for this work, but due to the nature of the incremental algorithm expect it could be ported to a streaming learning environment.  
 
 \section{Minibatch Active Semi-supervised Learning}
-In this section, we introduce an oracle abstraction for a class of active pool-based semi-supervised learning algorithms, and a few classes of algorithms to interface with such an oracle.  
+In this section, we introduce an oracle abstraction for a class of active pool-based semi-supervised learning algorithms, and discuss a particular implementation of an active semi-supervised learning algorithm in this abstraction.
 
 \subsection{A Simple Active Semi-Supervised Oracle}
-Here we define an oracle setup in which to implement our active, semi-supervised learning algorithm.  We assume that we're given a pool of inputs, each $x \in \mathbb{R}^{d}$, and can request labels each $y\in\{0..c\}$.  As active learning frameworks are typically structured, the dual objectives are to train and optimize some objective over the population dataset, while minimizing the number of labels requested.  
+Here we define an oracle setup in which to implement our active, semi-supervised learning algorithm.  We assume that we're given a pool of inputs, each $x \in \mathbb{R}^{d}$, and can request labels each $y\in\{0..c\}$.  As active/semi-supervised learning frameworks are typically structured, the dual objectives are to train and optimize some objective over the population dataset, while minimizing the number of labels requested.  
 
 In keeping this learning algorithm simple, we restrict it to run as follows.  The algorithm must run as a sequence of epochs.  In each epoch, the algorithm:
 \begin{enumerate}
 \item Produces a set of examples to request labels for
-\item Produces a set of example/label pairs from model would output with sufficient confidence
+\item Produces a set of example/label pairs the model scores with sufficient confidence (pseudo-label-examples)
 \item Bootstrap samples a minibatch from the semisupervised pseudo-labels and active labels collected so far.
-\item Re-scores a small, random subset of examples
+\item Trains/updates on this bootstrap sample.
+\item Re-scores a subset of examples for the next epoch
 \end{enumerate}
 
 This approach then strikes a balance between pool-based and streaming active learning algorithms.  As is normally the case, if we assume scoring / retraing makes up the bulk of runtime for iterative learning algorithms.  From the approach above, each epoch only need score a small sample, re-train on a minibatch, and label a few cases.  Ensuring latency of requesting the next label is often important for collecting labels in real-time labels.  
 
+In the following sections we'll outline the specific supervised model architecture, semi-supervised, active, and scoring algorithms used.  We'll then combine these into a single algorithm.  
+
 \subsection{Deep Model Architecture}
-The point of this approach is for the example selection and semi-supervised labeling to be agnostic to the supervised model architecture chosen.  For evaluation on MNIST we thus chose a commonly used architecture.  The 28x28 input images are fed into a 32-bank of 5x5 convolutional features, rectified linear and 2x2 max pooling layers, then 5x5x32 convolution with 32 features, relu/max pooling, and finally a 2-level fully connected network with a 1014-variable hidden layer.  For optimization, the adam optimizer was used with a learning rate of $10^-4$.  These settings are defaults used in tensorflow's advanced examples[7].
+Since our aim is for example selection and semi-supervised labeling to be agnostic to the supervised model architecture chosen, we don't focus heavily on the supervised model architecture.  For evaluation on MNIST we thus chose a commonly used architecture.  The 28x28 input images are fed into a 32-bank of 5x5 convolutional features, rectified linear and 2x2 max pooling layers, then 5x5x32 convolution with 32 features, relu/max pooling, and finally a 2-level fully connected network with a 1014-variable hidden layer.  For optimization, the adam optimizer was used with a learning rate of $10^-4$.  These settings are defaults used in tensorflow's advanced examples[7].
 
 \subsection{Thresholded Pseudo-Label}
 The semi-supervised algorithm we use is similar to that in Pseudo-Label[1], but diverges in a few important respects.  Pseudo-labeling is a simple enough method: to leverage unlabeled examples, we use the current model to label examples and treat those labels as real labels.  In the original paper this was shown to work well, but was highly sensitive to dynamic-balancing of the pseudo and real labels' contribution to overall loss.  We as well went without the deep-auto-encoder phase used in Pseudo-label, since this would break our requirement that the algorithm be model-agnostic.  
@@ -124,20 +128,20 @@ To combat this, and for theoretical reasons listed below, we instead label only 
 
 One lense to view thresholded pseudo-labeling from is as graph-score-propagation over an implicitely calculated similarity metric.  Assume we have two samples $x_1,x_2 \in \mathbb{R}^d$.  Assume that both $x_1,x_2$ have ground-truth label $c$, but only the label for $x_1$ has been collected.  After training for enough iterations on $x_1$, we'd expect the model scoring function $f_{\theta}$ to score high in class $c$ for $x_1$.  Assuming $f$ is locally differentiable near $x_1$, then for some $\epsilon$ if $\|x_1-x_2\|<\epsilon$ then $\|f(x_1)-f(x_2)\|$ should be small.  In such a case $f_{\theta}(x_2)$ would be as well, and thus would have a high score for class $c$.  
 
-This analogy has a few theoretical flaws: convolutional networks aren't guaranteed to be locally differentiable due to rectified linear and max pooling layers.  As well, for the argument to fully hold we'd need the differentiability condition to hold for the map and its inverse.  With only one direction valid, we can state that we will capture and learn from cases that are similar, but can't say we won't flag cases that are far from the current labeled set.  It's reasonable to assume that most examples' neurons aren't perfectly at the boundary of a max or relu nonlinearity. 
+This analogy has a few theoretical flaws: convolutional networks aren't guaranteed to be locally differentiable due to rectified linear and max pooling layers.  As well, for the argument to fully hold we'd need the differentiability condition to hold for the map and its inverse.  With only one direction valid, we can state that we will capture and learn from cases that are similar, but can't say we won't flag cases that are far from the current labeled set.  Even with its theoretical flaws, in practice this interpretation should often hold.  High-scoring examples that are dissimilar are likely still matches, and so these are useful to include for expanding the examplem set in more than a simple euclidean similarity graph.  It's reasonable to assume that most examples' neurons aren't perfectly at the boundary of a max or relu nonlinearity.  
 
-A positive characteristic of the induced similarity measure is that it should weight inputs according to predictive power, rather than uniformly as a euclidean/cosine/jaccard similarity would do.  Another is that with a high enough threshold, the added noise of using pseudo-labels will be significantly lower, since more labels will be correct. 
+A benefit of the induced similarity measure is that it should weight inputs according to predictive power, rather than uniformly as a euclidean/cosine/jaccard similarity would do.  Another is that with a high enough threshold, the added noise of using pseudo-labels will be significantly lower, since more labels will be correct. 
 
-This gets us to choosing a threshold.  Our active sampling strategy effectively calibrates a subset of classifier scores, so we leverage this calibration to set a dynamic threshold.  We show empirically below that for a small number of labels the deep model is poorly calibrated.  We model error as being made up of just a bias term before being passed to the final sigmoid.  Concretely, we from now on only consider the max score associated with each example and a given model.  In logistic regression or our deep net, that score is $\sigma(\hat{z})$ for some input $\hat{z}$, $\sigma(x)=\frac{1}{1+e^{-x}}$.  We assume that our model score $\sigma(\hat{z})$ is systematically off the ground-truth model's prediction of $\sigma(z)$ by $\hat{z}=z+b$, $b$ the bias.  
+This gets us to choosing a threshold.  Our active sampling strategy effectively calibrates a subset of classifier scores, so we leverage this calibration to set a dynamic threshold.  For the remainder of this subsection we will only consider the max score associated with each example and a given model.  We show empirically below that for a small number of labels the deep model we're using is poorly calibrated.  We model calibration error as being made up of just a bias term before being passed to the final sigmoid, and under this assumption give a method to adjust.  In logistic regression or our deep net, that score is $\sigma(\hat{z})$ for some input $\hat{z}$, $\sigma(x)=\frac{1}{1+e^{-x}}$.  We assume that our model score $\sigma(\hat{z})$ is systematically off the ground-truth model's prediction of $\sigma(z)$ by $\hat{z}=z+b$, $b$ the bias.  
 
-It's quite convenient that a prerequisite for the active sampling strategy used is estimating the bias term $b$.  We can then use that term to obtain a modified threshold $\tau$ that has calibrated probability 0.9.  t such that $\sigma(\hat{z})=t \iff \sigma(z)=0.9$.  Since $\hat{z}=z+b$, we have:
-$\sigma(\hat(z)-b)=0.9$, $\hat(z)=\sigma^{-1}(0.9)+b$, and thus $\tau_s=\sigma(\sigma^{-1}(0.9)+b)$.  Since we usually deal with bias thresholds, given the 0.5 probability threshold for active learning is $\tau_a$, $b=\sigma^{-1}(\tau_a)$ and finally we have:
+It's convenient that a prerequisite for the active sampling strategy used is estimating the bias term $b$.  We can then use that term to obtain a modified threshold $\tau$ that has calibrated probability 0.9.  Given $\tau$ is a threshold with biased scores achieving this 0.9 calibrated probability, we have that $\sigma(\hat{z})=\tau \iff \sigma(z)=0.9$.  Since $\hat{z}=z+b$, we have:
+$\sigma(\hat{z}-b)=0.9$, $\hat{z}=\sigma^{-1}(0.9)+b$, and thus $\tau_s=\sigma(\sigma^{-1}(0.9)+b)$.  Since we usually deal with bias thresholds, given the 0.5 probability threshold for active learning is $\tau_a$, $b=\sigma^{-1}(\tau_a)$, we have:
 $$\tau_s=\sigma(\sigma^{-1}(0.9)+\sigma^{-1}(\tau_a))$$
 
 \subsection{Adaptive Calibration for Active Learning}
 From the previous section we've learned that adaptive label selection serves a dual-purpose: for intelligently thresholded semi-supervised learning, and as well as in optimally improving the model with labels.  This helps determine our approach: a calibrated variant of uncertainty-sampling with noise. 
 
-While uncertainty-sampling has been shown to perform worse than QBC and other methods, the effect of calibration over bias hasn't been studied to the author's knowledge.  We show that for small sample-sizes where the classifier isn't yet calibrated, adaptively-calibrated uncertainty-sampling beats out naive uncertainty sampling.  We also show that it very efficiently achieves calibration near the score of 0.5. 
+While uncertainty-sampling has been shown to perform worse than QBC and other methods, the effect of calibration to combat bias hasn't been studied to the author's knowledge.  We show that for small sample-sizes where the classifier isn't yet calibrated, adaptively-calibrated uncertainty-sampling beats out naive uncertainty sampling.  We also show that it very efficiently achieves calibration near the score of 0.5. 
 
 A commonly used and effective classifier calibration technique is platt scaling, which fits a logistic regression model with uncalibrated scores as inputs.  The pervasive use and effectiveness justifies our assumption that the functional form (a sigmoid) is not what results in our poorly-calibrated classifier, but bias or parameters.  This gets us back to the assumption of the previous section: that a bias term is what makes up mis-calibration of scores.  
 
@@ -147,21 +151,21 @@ To achieve this, we dynamically approximate the logodds objective and use online
 
 $$min_b \left(\hat{z}-b-logodds\right)^2$$
 
-This gets us to a gradient update $b \leftarrow b - \gamma \left( logodds+b-\hat{z} \right)$.  Since in our case we're sampling in the region of 0.5 (with biased noise), we have that $b \approx \hat{z}$.  This gets us to the final form:
+This gets us to a gradient update $b \leftarrow b - \left( logodds+b-\hat{z} \right)$.  Since in our case we're sampling in the region of 0.5 (with biased noise), we have that $b \approx \hat{z}$.  This gets us to the final form:
 
-$$b \leftarrow b - \gamma logodds$$
+$$b \leftarrow b - logodds$$
 
 This leaves us with the task of empirically approximating $logodds$ at each timestep.  The model changes each iteration, and so does the labeling distribution.  An easier statistic to approximate than logodds is the proportion of positives.  To bias towards the more recent and correct model, we use an exponentially-decaying count for positives and negatives.  
 
-This gives us at each timestep, our pseudo-count of correct labels is $neg=(1-\gamma)\mathbbm{1}(correct)+\gamma neg$, $neg=(1-\gamma)\mathbbm{1}(correct)+\gamma neg$ for negatives.  
+This gives us at each timestep, our pseudo-count of correct labels is $pos=(1-\gamma)\mathbbm{1}(correct)+\gamma pos$, $neg=(1-\gamma)\mathbbm{1}(correct)+\gamma neg$ for negatives.  
 
 Tuning $\gamma$ is then a balance between significance and low-variance of model estimates, and the recency of the model/score selection logodds being evaluated.  A larger $\gamma$ takes into account more samples in calculating the fraction of positives/negatives, but doesn't adapt as quickly to changes in the underlying model.  
 
-Around 10 examples is around the lowest we could go to a sane binomial fraction around 0.5, with standard deviation of $\sqrt(\frac{p(1-p)}{n}) = 0.5/sqrt(10) \approx 0.15$.  In aiming for 0.99 proportion of our weight to come from the most recent 10, we then arrive at $\gamma \approx 0.65$ as a sane first choice of the hyperparameter.  This is heuristic, and with multiple sessions of active learning could be tuned empirically.  
+Roughly 10 examples is close to the smallest number of samples to sufficiently approximate a bernouli paremeter around 0.5.  These 10 samples results in a standard deviation of $\sqrt{\frac{p(1-p)}{n}} = 0.5/sqrt(10) \approx 0.15$.  In aiming for 0.99 proportion of our weight to come from the most recent 10, we then arrive at $\gamma \approx 0.65$ as a sane first choice of the hyperparameter.  This is heuristic, and with multiple sessions of active learning could be tuned empirically.  
 
-The last consideration in active learning is sampling variance decay.  This is a simple tactic to avoid heavy bias: add noise to uncertainty sampling.  Working off the recurring theme of gaussian additions to scores before being passed through the final sigmoid, we add decaying gaussian noise to the pre-sigmoid scores.  
+The last consideration in active learning is combatting bias.  We use a simple tactic here: adding decaying noise to uncertainty sampling.  Working off the recurring theme of gaussian additions to scores before being passed through the final sigmoid, we add decaying gaussian noise to the pre-sigmoid scores.  
 
-This comes gives us sampled scores:
+This gets us our final sampled scores:
 $$\tau' = \sigma(\sigma^{-1}(\tau)+\delta)$$
 
 Where $\delta \sim  \mathcal{N}(0,\alpha e^{-\beta | A | })$.  Here the variance simply decays exponentially in the number of labels.  Again some reasonable apriori choices are sufficient.  Assuming that we'd like variance to be at around 1.5 at 100 iterations (recall $\sigma^{-1}(0.9) \approx 2.2$), and around 0.01 at 100 iterations, we solve and get $\alpha=1.5, \beta=0.05$. 
@@ -196,8 +200,8 @@ At this point we have the main background to give a complete algorithm for train
 \EndIf
 \State 
 \State //Semisupervised
-\State $\tau_s \leftarrow \sigma(\sigma^{-1}(\tau)+\delta_2)$
-\State $B \leftarrow \left\{b \mid model(b)> \tau_s \right\}$ 
+\State $\tau_s \leftarrow \sigma(\sigma^{-1}(\tau)+\delta_2)$ \Comment{Get roughly probability of 0.9}
+\State $B \leftarrow \left\{b \mid model(b)> \tau_s \right\}$ \Comment{Select examples above that threshold}
 \For{$i \leftarrow B$}
 \State $Y_i \leftarrow predict_{\theta} (i)$
 \EndFor
@@ -205,7 +209,7 @@ At this point we have the main background to give a complete algorithm for train
 \State //Model Update
 \State $a \leftarrow \textrm{balanced-sample}(A,40)$
 \State $b \leftarrow \textrm{balanced-sample}(B,40)$
-\State $\theta \leftarrow \textrm{minibatch-fit}(X,Y,a,b)$
+\State $\theta \leftarrow \textrm{minibatch-fit}(X,Y,a \cup b)$
 \State
 \State //Rescore
 \State Update model scores $\{ P_i \mid i \in \textrm{uniform-sample}(E,\eta_2) \}$
@@ -213,9 +217,9 @@ At this point we have the main background to give a complete algorithm for train
 \end{algorithmic}
 \end{algorithm}
 
-Walking through the algorithm, we see that it follows the general form outlined in the oracle earlier.  Variables are instantiated, then a process of sampling/labeling, semisupervised learning, model training, and scoring runs in minibatches.  
+Walking through the algorithm, we see that it follows the general form outlined in the oracle abstraction earlier.  Variables are instantiated, then a process of sampling/labeling, semisupervised learning, model training, and scoring runs in minibatches.  
 
-The core of this algorithm is striking a balance in the progress of each of the component parts.  The components to balance are the amounts of model updating, rescoring, and active sampling per epoch.  The amount of semisupervised learning is really controlled by active calibration, and an apriori-set parameter $\delta_3$ (see derivation above).  
+The core of this algorithm is striking a balance in the progress of each of the component sections.  The components to balance are the amounts of model updating, rescoring, and active sampling per epoch.  The amount of semisupervised learning is controlled by active calibration, and an apriori-set parameter $\delta_3$ (see derivation above).  
 
 The rates of progress are controlled by the parameters $\eta_1$,$\eta_2$, and the number 40 in the model update section.  Since it's the relative quantities of parameters that matter most, and somewhere in the range of 40-100 is a generally-recognized-good parameter setting for MNIST minibatch-sizes, we fix the MNIST minibatch size first.  
 
@@ -226,45 +230,49 @@ The point of this algorithm is for it to be efficient, and so finding the minimu
 
 
 \section{Experiments}
-The core experiment we ran was on MNIST, using a well-known deep-network architecture detailed above.  Data was collected from these experiments to compare the accuracy per label of algorithm variants, and evaluate the effectiveness of the above calibration algorithm.  
+The core experiments we ran were on MNIST, using the well-known deep-network architecture detailed above.  Data was collected from these experiments to compare the accuracy per label of algorithm variants, and evaluate the effectiveness of the above calibration algorithm.  
 
 \subsection{Calibration and sampling}
+We found that the adaptive calibration algorithm detailed above was quite effective, although there could still be work in reducing overshooting, and achieving convergence guarantees.  
+
+Two trials were required for the calibration experiments.  In both the semi-supervised learning algorithm pseudo-labeled above a threshold as defined in previous sections, but in one the threshold wasn't adjusted and no noise was added (straight 0.5 uncertainty-sampling), and in the other the threshold changed.  Comparing the rolling 10-label-window fraction of positives between the two is quite clear.  
+
+In both trials, the trend up to 100 labels is easily explained.  The model has random weights and hasn't learned.  Thus at any but the highest thresholds the fraction of positives will be less than 0.5, and model scores overestimate propensity.  The trend above 0.5 after 100 labels is more unusual.  This could be a case of bias in the classifier induced by active/pseudo-labeling.  See Figure 1.  
+
 \begin{figure}[h]
   \center 
   \includegraphics[scale=0.5]{adaptive-threshold}
   \includegraphics[scale=0.5]{calibration}
-  \caption{Left: Adaptive threshold over number of labels queried.  Right:empirical fraction of selected labels, with adaptive thresholding, that are positive}
+  \includegraphics[scale=0.5]{non-adaptive}
+  \caption{Left: Adaptive threshold over number of labels queried.  It's interesting to note that in starting out, we would expect performance to be very poor, so almost all scores (even those around 0.5) would be over-estimates.  
+  Right: empirical fraction of selected labels with adaptive thresholding that are positive.  This is pretty close to calibrated throughout, the notable exception being around 100 labels.  Note that all plots start after 10, since we using rolling averages over the last 10 labels.  
+  Bottom: This is the baseline with uncertainty-sampling: selecting examples with raw score 0.5.  As expected less than 0.5 fraction start out positive, but what's more interesting is that scores then overshoot.  }
 \end{figure}
 \subsection{Held-out Accuracy}
+In Figure 2, we see the core results of threshold-pseudo-labeling and adaptive calibration/selection.  There were 6 experiments run against the same MNIST dataset with the same deep network.  As explained, the naming convention followed label-selector/semisupervised-selector.  The random active selector is the easiest to grasp.  In the Algorithm1, instead of maintaining thresholds and selecting labels based on those, we uniformly randomly choose the next example to request a label of.  The "uncertain" sampling strategy requests labels for examples that have a max class-score closest to 0.5.  Adaptive label-sampling is using the main sampling strategy we detailed above.
+
+For the semi-supervised selectors, "random" uniformly randomly selects pseudo-labels in each mini-batch.  Empty does no semi-supervised learning.  The "top" selector is the threshold semi-supervised selector detailed in Algorithm 1.  
+
+It's clear that adaptive/uncertainty sampling, along with semi-supervised-learning based on thresholding performs the much better than the rest.  At around 85 labels, adaptive sampling with threshold-pseudo-labeling gets to around 90\%.  Most other methods don't reach that performance until around 200 labels.  
+
+It's interesting to see the performance of adaptive and uncertainty sampling even out at around 80 labels.  One possible explanation here is from the previous calibration plots: at around 80 labels the adaptive calibration scores take a rapid dive.  This rapid dive is to combat the increase in performance from when the classifier begins making gains.  An interesting follow-up here would be to analyze higher probability thresholds than 0.5, as that could as well explain some of these interesting artifacts.  
+
+
+
 \begin{figure}[h]
   \center 
   \includegraphics[scale=0.5]{mnist-results}
-  \caption{Performance of various active-semisupervised algorithm variants.  These follow the naming convention <active selector>-<semisupervised selector>}
+  \caption{Performance of various active-semisupervised algorithm variants.  These follow the naming convention <label selector>-<semisupervised selector>}
 \end{figure}
 
-What was 
-
-
-Given this framework, what is left for 
-
-The above framework supports a
-While the above framework does restrict the learning algorithm and implementation
-The restrictions on our learning algorithm are only then that it can be efficiently trained in mini-batches, 
-
-it has sufficient confidence in to use for semi-supervised learning
-objective is to simultaneously minimize the number of labels request
-we s with any active learning algorithm, the objective is to 
-
-FUPS: 
-- theoretical work on this adaptive calibration algorithm
-- deadling with unbalanced sets
-
 \section{Conclusion}
-Future work would probably include transfer learning, more datasets (text), 
-We expect performance to be more significant for highly-skewed classes.  
-Theoretical work on adaptive calibration (right now it's rough).  Regret bounds, ...
-It might be interesting in future work to investigate actively re-scoring, based on current score.  
-<transfer learning?>
+From this work we can draw a few clear conclusions, but there are plenty of avenues to dig into in follow-ups.  The most compelling conclusion is that using simple model-agnostic algorithms, it's possible to get state-of-the-art performance in very few labels.  
+
+The main avenues of further research would be to better characterize patterns in results: precisely when and why does adaptive calibration and pseudo-labeling perform well?  As well, theoretical work on convergence of adaptive calibration, and simulations could be helpful for practitioners interested in calibration for its own right.
+
+Another obvious avenue to apply these methods is to highly-skewed-labels: MNIST is nearly perfectly balanced.  One would expect the performance gains and problems faced to be significantly different for highly-skewed classes.  The benefits over random sampling should also be much more compelling.  
+
+Lastly, the application and evaluation of these techniques on other datasets/models would probably shed light on a number of the questions above.  The most straightforward would be character-level convolutional network classification, but any supervised problem would be interesting.  
 \section*{References}
 
 \small
@@ -289,445 +297,16 @@ It might be interesting in future work to investigate actively re-scoring, based
 
 [10] Bengio, Yoshua. "Deep learning of representations for unsupervised and transfer learning." Unsupervised and Transfer Learning Challenges in Machine Learning 7 (2012): 19.
 
+[11] Rosenberg, Chuck, Martial Hebert, and Henry Schneiderman. "Semi-supervised self-training of object detection models." (2005).
 
+[12] Sindhwani, Vikas, Partha Niyogi, and Mikhail Belkin. "Beyond the point cloud: from transductive to semi-supervised learning." Proceedings of the 22nd international conference on Machine learning. ACM, 2005.
 
+[13] Settles, Burr. "Active learning literature survey." University of Wisconsin, Madison 52.55-66 (2010): 11.
 
+[14] Seung, H. Sebastian, Manfred Opper, and Haim Sompolinsky. "Query by committee." Proceedings of the fifth annual workshop on Computational learning theory. ACM, 1992.
 
-
+[15] Balcan, Maria-Florina, Alina Beygelzimer, and John Langford. "Agnostic active learning." Proceedings of the 23rd international conference on Machine learning. ACM, 2006.
 
 \end{document}
 
-
-\begin{algorithm}
-\caption{}
-\begin{algorithmic}
-\REQUIRE $n \geq 0 \vee x \neq 0$
-\ENSURE $y = x^n$
-\STATE $y \leftarrow 1$
-\IF{$n < 0$}
-\STATE $X \leftarrow 1 / x$
-\STATE $N \leftarrow -n$
-\ELSE
-\STATE $X \leftarrow x$
-\STATE $N \leftarrow n$
-\ENDIF
-\WHILE{$N \neq 0$}
-\IF{$N$ is even}
-\STATE $X \leftarrow X \times X$
-\STATE $N \leftarrow N / 2$
-\ELSE[$N$ is odd]
-\STATE $y \leftarrow y \times X$
-\STATE $N \leftarrow N - 1$
-\ENDIF
-\ENDWHILE
-\end{algorithmic}
-\end{algorithm}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-$$x \in \mathbb{R}^d$$
-
-
-
 Online Calibration for Semi-Supervised Active Learning 
-
-
-\begin{verbatim}
-
-
-
-fraction to score = 1-(frac to miss)^expected num iters
-
-NOTICE: our approach is incredibly computationally-efficent (minibatch incremental over pool, vs. O(n) in memory or O(n^2).  such an approch is necessary), simple, and achieves superior performance.  
-Naive methods achieve very poor calibration.  We use a label-efficient adaptive calibration algorithm, and a reformulation of pseudo-labeling to achieve state-of-the-art results on image and text classification benchmarks.  
-
-THE NOVELTY:
-- reducing pool-based active/semi-supervised learning to a thresholding/selection framework (compare to random)
-- algorithms for effectively doing this
-- the algorithm re-trains adaptively with examples coming in, training on the pool efficiently
-we re-balance!
-
-SECTIONS (6 pages to start, I'm sure there will be more):
-- title/abstract
-- 1 intro:
-    - what are some prior approaches to semisup?  active?  how is what we're doing novel in a nutshell?
-- 2 A simple, flexible framework for semi-supervised active learning
-- 3 Implementations that work well
-- 4 Theoretical justification
-- 5 Experiments
-    - performance evaluation, setup, the specific deep network structure/topology, 
-        
-- Discussion
-
-Key contributions:
-- model agnostic.  Especially important for deep learning.  
-- calibration
-- labeling all performs strictly worse
-
-plots:
-semisupervised threshold vs. accuracy plots (significant)
-significant difference between "incorrect & correct"
-
-KEY FACTS: 
-- massive difference in "predicted correctly" vs. not
-- adaptively calibrate based on this?  keep at ~0.3 correct empirically?
-adaptive vs. passive calibration?
-active metric is a combo of: 
-- 0.05-bin-density
-- probability
-compare to uncertainty-sampling:
-- just a function of score-value (0.9, ...)
-
-
-class skew (downsample training?)  keep accuracy as our metric
-\end{verbatim}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-\section{Submission of papers to NIPS 2016}
-
-\textbf{There is a new style file for papers submitted in 2016!}
-
-NIPS requires electronic submissions.  The electronic submission site
-is
-\begin{center}
-  \url{https://cmt.research.microsoft.com/NIPS2016/}
-\end{center}
-
-Please read carefully the instructions below and follow them
-faithfully.
-
-
-
-\subsection{Style}
-
-Papers to be submitted to NIPS 2016 must be prepared according to the
-instructions presented here. Papers may only be up to eight pages
-long, including figures. Since 2009 an additional ninth page
-\emph{containing only acknowledgments and/or cited references} is
-allowed. Papers that exceed nine pages will not be reviewed, or in any
-other way considered for presentation at the conference.
-
-The margins in 2016 are the same as since 2007, which allow for
-$\sim$$15\%$ more words in the paper compared to earlier years.
-
-Authors are required to use the NIPS \LaTeX{} style files obtainable
-at the NIPS website as indicated below. Please make sure you use the
-current files and not previous versions. Tweaking the style files may
-be grounds for rejection.
-
-\subsection{Retrieval of style files}
-
-The style files for NIPS and other conference information are
-available on the World Wide Web at
-\begin{center}
-  \url{http://www.nips.cc/}
-\end{center}
-The file \verb+nips_2016.pdf+ contains these instructions and
-illustrates the various formatting requirements your NIPS paper must
-satisfy.
-
-The only supported style file for NIPS 2016 is \verb+nips_2016.sty+,
-rewritten for \LaTeXe{}.  \textbf{Previous style files for \LaTeX{}
-  2.09, Microsoft Word, and RTF are no longer supported!}
-
-The new \LaTeX{} style file contains two optional arguments:
-\verb+final+, which creates a camera-ready copy, and \verb+nonatbib+,
-which will not load the \verb+natbib+ package for you in case of
-package clash.
-
-At submission time, please omit the \verb+final+ option. This will
-anonymize your submission and add line numbers to aid review.  Please
-do \emph{not} refer to these line numbers in your paper as they will
-be removed during generation of camera-ready copies.
-
-The file \verb+nips_2016.tex+ may be used as a ``shell'' for writing
-your paper. All you have to do is replace the author, title, abstract,
-and text of the paper with your own.
-
-The formatting instructions contained in these style files are
-summarized in Sections \ref{gen_inst}, \ref{headings}, and
-\ref{others} below.
-
-\section{General formatting instructions}
-\label{gen_inst}
-
-The text must be confined within a rectangle 5.5~inches (33~picas)
-wide and 9~inches (54~picas) long. The left margin is 1.5~inch
-(9~picas).  Use 10~point type with a vertical spacing (leading) of
-11~points.  Times New Roman is the preferred typeface throughout, and
-will be selected for you by default.  Paragraphs are separated by
-\nicefrac{1}{2}~line space (5.5 points), with no indentation.
-
-The paper title should be 17~point, initial caps/lower case, bold,
-centered between two horizontal rules. The top rule should be 4~points
-thick and the bottom rule should be 1~point thick. Allow
-\nicefrac{1}{4}~inch space above and below the title to rules. All
-pages should start at 1~inch (6~picas) from the top of the page.
-
-For the final version, authors' names are set in boldface, and each
-name is centered above the corresponding address. The lead author's
-name is to be listed first (left-most), and the co-authors' names (if
-different address) are set to follow. If there is only one co-author,
-list both author and co-author side by side.
-
-Please pay special attention to the instructions in Section \ref{others}
-regarding figures, tables, acknowledgments, and references.
-
-\section{Headings: first level}
-\label{headings}
-
-All headings should be lower case (except for first word and proper
-nouns), flush left, and bold.
-
-First-level headings should be in 12-point type.
-
-\subsection{Headings: second level}
-
-Second-level headings should be in 10-point type.
-
-\subsubsection{Headings: third level}
-
-Third-level headings should be in 10-point type.
-
-\paragraph{Paragraphs}
-
-There is also a \verb+\paragraph+ command available, which sets the
-heading in bold, flush left, and inline with the text, with the
-heading followed by 1\,em of space.
-
-\section{Citations, figures, tables, references}
-\label{others}
-
-These instructions apply to everyone.
-
-\subsection{Citations within the text}
-
-The \verb+natbib+ package will be loaded for you by default.
-Citations may be author/year or numeric, as long as you maintain
-internal consistency.  As to the format of the references themselves,
-any style is acceptable as long as it is used consistently.
-
-The documentation for \verb+natbib+ may be found at
-\begin{center}
-  \url{http://mirrors.ctan.org/macros/latex/contrib/natbib/natnotes.pdf}
-\end{center}
-Of note is the command \verb+\citet+, which produces citations
-appropriate for use in inline text.  For example,
-\begin{verbatim}
-   \citet{hasselmo} investigated\dots
-\end{verbatim}
-produces
-\begin{quote}
-  Hasselmo, et al.\ (1995) investigated\dots
-\end{quote}
-
-If you wish to load the \verb+natbib+ package with options, you may
-add the following before loading the \verb+nips_2016+ package:
-\begin{verbatim}
-   \PassOptionsToPackage{options}{natbib}
-\end{verbatim}
-
-If \verb+natbib+ clashes with another package you load, you can add
-the optional argument \verb+nonatbib+ when loading the style file:
-\begin{verbatim}
-   \usepackage[nonatbib]{nips_2016}
-\end{verbatim}
-
-As submission is double blind, refer to your own published work in the
-third person. That is, use ``In the previous work of Jones et
-al.\ [4],'' not ``In our previous work [4].'' If you cite your other
-papers that are not widely available (e.g., a journal paper under
-review), use anonymous author names in the citation, e.g., an author
-of the form ``A.\ Anonymous.''
-
-\subsection{Footnotes}
-
-Footnotes should be used sparingly.  If you do require a footnote,
-indicate footnotes with a number\footnote{Sample of the first
-  footnote.} in the text. Place the footnotes at the bottom of the
-page on which they appear.  Precede the footnote with a horizontal
-rule of 2~inches (12~picas).
-
-Note that footnotes are properly typeset \emph{after} punctuation
-marks.\footnote{As in this example.}
-
-\subsection{Figures}
-
-All artwork must be neat, clean, and legible. Lines should be dark
-enough for purposes of reproduction. The figure number and caption
-always appear after the figure. Place one line space before the figure
-caption and one line space after the figure. The figure caption should
-be lower case (except for first word and proper nouns); figures are
-numbered consecutively.
-
-You may use color figures.  However, it is best for the figure
-captions and the paper body to be legible if the paper is printed in
-either black/white or in color.
-\begin{figure}[h]
-  \fbox{\rule[-.5cm]{0cm}{4cm} \rule[-.5cm]{4cm}{0cm}}
-  \fbox{\rule[-.5cm]{0cm}{4cm} \rule[-.5cm]{4cm}{0cm}}
-  \caption{Sample figure caption.}
-\end{figure}
-
-\subsection{Tables}
-
-All tables must be centered, neat, clean and legible.  The table
-number and title always appear before the table.  See
-Table~\ref{sample-table}.
-
-Place one line space before the table title, one line space after the
-table title, and one line space after the table. The table title must
-be lower case (except for first word and proper nouns); tables are
-numbered consecutively.
-
-Note that publication-quality tables \emph{do not contain vertical
-  rules.} We strongly suggest the use of the \verb+booktabs+ package,
-which allows for typesetting high-quality, professional tables:
-\begin{center}
-  \url{https://www.ctan.org/pkg/booktabs}
-\end{center}
-This package was used to typeset Table~\ref{sample-table}.
-
-\begin{table}[t]
-  \caption{Sample table title}
-  \label{sample-table}
-  \centering
-  \begin{tabular}{lll}
-    \toprule
-    \multicolumn{2}{c}{Part}                   \\
-    \cmidrule{1-2}
-    Name     & Description     & Size ($\mu$m) \\
-    \midrule
-    Dendrite & Input terminal  & $\sim$100     \\
-    Axon     & Output terminal & $\sim$10      \\
-    Soma     & Cell body       & up to $10^6$  \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-\section{Final instructions}
-
-Do not change any aspects of the formatting parameters in the style
-files.  In particular, do not modify the width or length of the
-rectangle the text should fit into, and do not change font sizes
-(except perhaps in the \textbf{References} section; see below). Please
-note that pages should be numbered.
-
-\section{Preparing PDF files}
-
-Please prepare submission files with paper size ``US Letter,'' and
-not, for example, ``A4.''
-
-Fonts were the main cause of problems in the past years. Your PDF file
-must only contain Type 1 or Embedded TrueType fonts. Here are a few
-instructions to achieve this.
-
-\begin{itemize}
-
-\item You should directly generate PDF files using \verb+pdflatex+.
-
-\item You can check which fonts a PDF files uses.  In Acrobat Reader,
-  select the menu Files$>$Document Properties$>$Fonts and select Show
-  All Fonts. You can also use the program \verb+pdffonts+ which comes
-  with \verb+xpdf+ and is available out-of-the-box on most Linux
-  machines.
-
-\item The IEEE has recommendations for generating PDF files whose
-  fonts are also acceptable for NIPS. Please see
-  \url{http://www.emfield.org/icuwb2010/downloads/IEEE-PDF-SpecV32.pdf}
-
-\item \verb+xfig+ "patterned" shapes are implemented with bitmap
-  fonts.  Use "solid" shapes instead.
-
-\item The \verb+\bbold+ package almost always uses bitmap fonts.  You
-  should use the equivalent AMS Fonts:
-\begin{verbatim}
-   \usepackage{amsfonts}
-\end{verbatim}
-followed by, e.g., \verb+\mathbb{R}+, \verb+\mathbb{N}+, or
-\verb+\mathbb{C}+ for $\mathbb{R}$, $\mathbb{N}$ or $\mathbb{C}$.  You
-can also use the following workaround for reals, natural and complex:
-\begin{verbatim}
-   \newcommand{\RR}{I\!\!R} %real numbers
-   \newcommand{\Nat}{I\!\!N} %natural numbers
-   \newcommand{\CC}{I\!\!\!\!C} %complex numbers
-\end{verbatim}
-Note that \verb+amsfonts+ is automatically loaded by the
-\verb+amssymb+ package.
-
-\end{itemize}
-
-If your file contains type 3 fonts or non embedded TrueType fonts, we
-will ask you to fix it.
