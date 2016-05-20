@@ -63,7 +63,11 @@ def active_evaluate(conf):
         #alpha = 0.022
         #beta = 4.80
         #p_semisup = 0.99-np.exp(-alpha*(len(I)+50+beta))
-        n_semisup = sum(mnm.Pmax>sigmoid(logodds(active_selector.thresh)+2.0))
+        if conf['active_selector']['name'] == 'random':
+            thresh = conf['active_selector']['active_thresh']
+        else:
+            thresh = active_selector.thresh
+        n_semisup = sum(mnm.Pmax>sigmoid(logodds(thresh)+2.0))
         semisup = semisup_selector.next_indices(Y,state,mnm,n_ixs=n_semisup)
 
         # get full label set so far

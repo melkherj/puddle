@@ -27,7 +27,7 @@ class AdaptiveSelector(Selector):
         k = self.n_pos+self.n_neg
         P_select = np.abs(modeler.Pmax-
                         add_noise(self.thresh,
-                        variance=1.5*math.exp(-0.027*k)))
+                        variance=1.5*math.exp(-0.05*k)))
         P_select[Y>=0] = np.inf #don't return cases already labeled
         active = map(int,np.argsort(P_select)[:n_ixs]) #min n_ixs by P_select
         if n_ixs>0: 

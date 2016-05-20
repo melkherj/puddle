@@ -15,13 +15,17 @@
 \usepackage[utf8]{inputenc} % allow utf-8 input
 \usepackage[T1]{fontenc}    % use 8-bit T1 fonts
 \usepackage{hyperref}       % hyperlinks
+\usepackage{cite}       % hyperlinks
 \usepackage{url}            % simple URL typesetting
 \usepackage{booktabs}       % professional-quality tables
 \usepackage{amsfonts}       % blackboard math symbols
 \usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{bbm}
 \usepackage{microtype}      % microtypography
-\usepackage{algorithm}
-\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{algorithm,algorithmicx,algpseudocode}
+
+\graphicspath{ {images/} }
 
 \title{Sequential, Pool-based Semi-supervised Active Learning}
 
@@ -72,10 +76,226 @@
 \maketitle
 
 \begin{abstract}
-In this paper we lay out a simple, model-agnostic and computationally efficient framework for semi-supervised active learning.  The algorithm assumes only access to a model minibatch-fit and scoring oracle, efficiently scores samples, and runs semi-supervised active learning on small incremental mini-batches.  We show results that are state of the art on 10-class-MNIST: 89.5\% accuracy at 85 labels, and 92.5\% held-out accuracy at 150 labels.  
+In this paper we lay out a model-agnostic and computationally efficient framework for semi-supervised active learning.  The algorithm assumes only access to a model minibatch-fit and scoring oracle, efficiently scores samples, and runs semi-supervised active learning incrementally on mini-batches.  We achieve empirical results that are state of the art on 10-class-MNIST: 89.5\% held-out accuracy with 85 labels, and 92.5\% with 150 labels.  
 \end{abstract}
 
 \section{Introduction}
+While there have been great strides in supervised classification problems in text, speech, and audio, recent deep-learning approaches typically require thousands or tens of thousands of labeled examples to achive state-of-the-art performance.  Due to the substantial investment required in collecting such a set of labels, the set of problems tackled in industry are those large enough to justify the cost.  Any simple techniques that can decrease this labeling cost would thus significantly increase the breadth of supervised machine-learning applications currently tackled.  
+
+This is one of the primary motivators for the machine-learning subfields of active, semi-supervised, and transfer learning.  The field of transfer-learning uses a model trained on one dataset, to bootstrap a model on another[9][10].  Semi-supervised learning seeks to extract patterns from examples that aren't labeled, and use those patterns discovered to improve performance on labeled examples.  Finally, active learning decreases the number of labels used by intelligently selecting examples to label.  
+
+A few classes of semi-supervised learning approaches include graph methods, clustering, and probabilistic/density-based sampling[8][6].  These methods generally require deep model introspection, modeling assumptions, or the creation of an $O(n^2)$ similarity-matrix.  Graph-based methods utilitize a similarity matrix, constructed via domain-knowledge or a model.  Methods utilizing probabilistic graphical models assume data follows that particular distribution.  
+
+Active learning algorithms .  We chose to focus on pool-based active learning.  
+
+We present an algorithm that 
+Active learning as well falls into 
+Modern semi-supervised learning approaches generally fall into 
+Some of the most commonly-used classes algorithms for semi-supervised learning are 
+Semi-supervised algorithms
+<common semisupervised learning techniques>
+<common active learning techniques>  <why pool over active>
+<fully describe why our result is radically different from the above, why we aim at semi-supervised and active>
+We give a model-agnostic algorithm that achieves state-of-the-art results, 
+
+\section{Minibatch Active Semi-supervised Learning}
+In this section, we introduce an oracle abstraction for a class of active pool-based semi-supervised learning algorithms, and a few classes of algorithms to interface with such an oracle.  
+
+\subsection{A Simple Active Semi-Supervised Oracle}
+Here we define an oracle setup in which to implement our active, semi-supervised learning algorithm.  We assume that we're given a pool of inputs, each $x \in \mathbb{R}^{d}$, and can request labels each $y\in\{0..c\}$.  As active learning frameworks are typically structured, the dual objectives are to train and optimize some objective over the population dataset, while minimizing the number of labels requested.  
+
+In keeping this learning algorithm simple, we restrict it to run as follows.  The algorithm must run as a sequence of epochs.  In each epoch, the algorithm:
+\begin{enumerate}
+\item Produces a set of examples to request labels for
+\item Produces a set of example/label pairs from model would output with sufficient confidence
+\item Bootstrap samples a minibatch from the semisupervised pseudo-labels and active labels collected so far.
+\item Re-scores a small, random subset of examples
+\end{enumerate}
+
+This approach then strikes a balance between pool-based and streaming active learning algorithms.  As is normally the case, if we assume scoring / retraing makes up the bulk of runtime for iterative learning algorithms.  From the approach above, each epoch only need score a small sample, re-train on a minibatch, and label a few cases.  Ensuring latency of requesting the next label is often important for collecting labels in real-time labels.  
+
+\subsection{Deep Model Architecture}
+The point of this approach is for the example selection and semi-supervised labeling to be agnostic to the supervised model architecture chosen.  For evaluation on MNIST we thus chose a commonly used architecture.  The 28x28 input images are fed into a 32-bank of 5x5 convolutional features, rectified linear and 2x2 max pooling layers, then 5x5x32 convolution with 32 features, relu/max pooling, and finally a 2-level fully connected network with a 1014-variable hidden layer.  For optimization, the adam optimizer was used with a learning rate of $10^-4$.  These settings are defaults used in tensorflow's advanced examples[7].
+
+\subsection{Thresholded Pseudo-Label}
+The semi-supervised algorithm we use is similar to that in Pseudo-Label[1], but diverges in a few important respects.  Pseudo-labeling is a simple enough method: to leverage unlabeled examples, we use the current model to label examples and treat those labels as real labels.  In the original paper this was shown to work well, but was highly sensitive to dynamic-balancing of the pseudo and real labels' contribution to overall loss.  We as well went without the deep-auto-encoder phase used in Pseudo-label, since this would break our requirement that the algorithm be model-agnostic.  
+
+To combat this, and for theoretical reasons listed below, we instead label only unsupervised examples with scores above a threshold.  Real and pseudo-labels are given uniform weight in the final loss function, but pseudo-labeling is only done for examples having probability score >0.9.  We show below that empirically, the results using this approach are substantially better than random unsupervised labeling.  
+
+One lense to view thresholded pseudo-labeling from is as graph-score-propagation over an implicitely calculated similarity metric.  Assume we have two samples $x_1,x_2 \in \mathbb{R}^d$.  Assume that both $x_1,x_2$ have ground-truth label $c$, but only the label for $x_1$ has been collected.  After training for enough iterations on $x_1$, we'd expect the model scoring function $f_{\theta}$ to score high in class $c$ for $x_1$.  Assuming $f$ is locally differentiable near $x_1$, then for some $\epsilon$ if $\|x_1-x_2\|<\epsilon$ then $\|f(x_1)-f(x_2)\|$ should be small.  In such a case $f_{\theta}(x_2)$ would be as well, and thus would have a high score for class $c$.  
+
+This analogy has a few theoretical flaws: convolutional networks aren't guaranteed to be locally differentiable due to rectified linear and max pooling layers.  As well, for the argument to fully hold we'd need the differentiability condition to hold for the map and its inverse.  With only one direction valid, we can state that we will capture and learn from cases that are similar, but can't say we won't flag cases that are far from the current labeled set.  It's reasonable to assume that most examples' neurons aren't perfectly at the boundary of a max or relu nonlinearity. 
+
+A positive characteristic of the induced similarity measure is that it should weight inputs according to predictive power, rather than uniformly as a euclidean/cosine/jaccard similarity would do.  Another is that with a high enough threshold, the added noise of using pseudo-labels will be significantly lower, since more labels will be correct. 
+
+This gets us to choosing a threshold.  Our active sampling strategy effectively calibrates a subset of classifier scores, so we leverage this calibration to set a dynamic threshold.  We show empirically below that for a small number of labels the deep model is poorly calibrated.  We model error as being made up of just a bias term before being passed to the final sigmoid.  Concretely, we from now on only consider the max score associated with each example and a given model.  In logistic regression or our deep net, that score is $\sigma(\hat{z})$ for some input $\hat{z}$, $\sigma(x)=\frac{1}{1+e^{-x}}$.  We assume that our model score $\sigma(\hat{z})$ is systematically off the ground-truth model's prediction of $\sigma(z)$ by $\hat{z}=z+b$, $b$ the bias.  
+
+It's quite convenient that a prerequisite for the active sampling strategy used is estimating the bias term $b$.  We can then use that term to obtain a modified threshold $\tau$ that has calibrated probability 0.9.  t such that $\sigma(\hat{z})=t \iff \sigma(z)=0.9$.  Since $\hat{z}=z+b$, we have:
+$\sigma(\hat(z)-b)=0.9$, $\hat(z)=\sigma^{-1}(0.9)+b$, and thus $\tau_s=\sigma(\sigma^{-1}(0.9)+b)$.  Since we usually deal with bias thresholds, given the 0.5 probability threshold for active learning is $\tau_a$, $b=\sigma^{-1}(\tau_a)$ and finally we have:
+$$\tau_s=\sigma(\sigma^{-1}(0.9)+\sigma^{-1}(\tau_a))$$
+
+\subsection{Adaptive Calibration for Active Learning}
+From the previous section we've learned that adaptive label selection serves a dual-purpose: for intelligently thresholded semi-supervised learning, and as well as in optimally improving the model with labels.  This helps determine our approach: a calibrated variant of uncertainty-sampling with noise. 
+
+While uncertainty-sampling has been shown to perform worse than QBC and other methods, the effect of calibration over bias hasn't been studied to the author's knowledge.  We show that for small sample-sizes where the classifier isn't yet calibrated, adaptively-calibrated uncertainty-sampling beats out naive uncertainty sampling.  We also show that it very efficiently achieves calibration near the score of 0.5. 
+
+A commonly used and effective classifier calibration technique is platt scaling, which fits a logistic regression model with uncalibrated scores as inputs.  The pervasive use and effectiveness justifies our assumption that the functional form (a sigmoid) is not what results in our poorly-calibrated classifier, but bias or parameters.  This gets us back to the assumption of the previous section: that a bias term is what makes up mis-calibration of scores.  
+
+We want to sample near the score threshold of $\tau$, and around this threshold the probability of a positive should be around 0.5.  From earlier we assume that our poorly-calibrated model scores $\hat{z}$ satisfy $\hat{z} = z+b$, $b$ the bias term.  If we find the bias term $b$ and sample around the region $\tau = \sigma(b)$, we should get correct matches with probability 0.5.  
+
+To achieve this, we dynamically approximate the logodds objective and use online gradient descent.  Under the assumption our current bias term achieves calibration, we should have that samples around score $\sigma(z)$ satisfy $z \approx loggodds$, logodds being the empirical logodds from sampling examples around each score $\sigma(z)$.  This gets us $\hat{z}-b \approx log(\frac{p}{n})$.  We then set our objective to be:
+
+$$min_b \left(\hat{z}-b-logodds\right)^2$$
+
+This gets us to a gradient update $b \leftarrow b - \gamma \left( logodds+b-\hat{z} \right)$.  Since in our case we're sampling in the region of 0.5 (with biased noise), we have that $b \approx \hat{z}$.  This gets us to the final form:
+
+$$b \leftarrow b - \gamma logodds$$
+
+This leaves us with the task of empirically approximating $logodds$ at each timestep.  The model changes each iteration, and so does the labeling distribution.  An easier statistic to approximate than logodds is the proportion of positives.  To bias towards the more recent and correct model, we use an exponentially-decaying count for positives and negatives.  
+
+This gives us at each timestep, our pseudo-count of correct labels is $neg=(1-\gamma)\mathbbm{1}(correct)+\gamma neg$, $neg=(1-\gamma)\mathbbm{1}(correct)+\gamma neg$ for negatives.  
+
+Tuning $\gamma$ is then a balance between significance and low-variance of model estimates, and the recency of the model/score selection logodds being evaluated.  A larger $\gamma$ takes into account more samples in calculating the fraction of positives/negatives, but doesn't adapt as quickly to changes in the underlying model.  
+
+Around 10 examples is around the lowest we could go to a sane binomial fraction around 0.5, with standard deviation of $\sqrt(\frac{p(1-p)}{n}) = 0.5/sqrt(10) \approx 0.15$.  In aiming for 0.99 proportion of our weight to come from the most recent 10, we then arrive at $\gamma \approx 0.65$ as a sane first choice of the hyperparameter.  This is heuristic, and with multiple sessions of active learning could be tuned empirically.  
+
+The last consideration in active learning is sampling variance decay.  This is a simple tactic to avoid heavy bias: add noise to uncertainty sampling.  Working off the recurring theme of gaussian additions to scores before being passed through the final sigmoid, we add decaying gaussian noise to the pre-sigmoid scores.  
+
+This comes gives us sampled scores:
+$$\tau' = \sigma(\sigma^{-1}(\tau)+\delta)$$
+
+Where $\delta \sim  \mathcal{N}(0,\alpha e^{-\beta | A | })$.  Here the variance simply decays exponentially in the number of labels.  Again some reasonable apriori choices are sufficient.  Assuming that we'd like variance to be at around 1.5 at 100 iterations (recall $\sigma^{-1}(0.9) \approx 2.2$), and around 0.01 at 100 iterations, we solve and get $\alpha=1.5, \beta=0.05$. 
+
+\section{Algorithm Details}
+At this point we have the main background to give a complete algorithm for training, scoring, semi-supervised, and active learning.  To reduce complexity we omitted a full specification of the deep network.  See Algorithm 1.
+
+\begin{algorithm}
+\caption{Full minibatch training algorithm}
+\label{alg:the_alg}
+\begin{algorithmic}[1]
+\Require Example pool $X\in\mathbb{R}^{nxd}$, example ids $\mathcal{E}=\{1..n\}$
+\Require label oracle $\mathcal{O}:\mathcal{E}\mapsto\{0..c\}$
+\State Hyperparameters $m=2000, \delta_2=2.2, \alpha=1.5, \beta=0.05, \tau_0=0.5, \gamma=0.65, \eta_1=0.1,\eta_2=0.1$ \Comment{These parameters were chosen apriori}
+\State $A \sim_{c} \mathcal{E} $ \Comment{c random examples to seed label set}
+\State $\theta \leftarrow \mathcal{N}(0,1)^{k}$ \Comment{Initialize all model parameters,num params}
+\State $\tau \leftarrow \tau_0 $ \Comment{active selection threshold}
+\State $P \leftarrow uniform(0,1)^{nxd}$ \Comment{Initialize scores randomly and normalize}
+\State $pos,neg \leftarrow 1$ \Comment{1 vs. 0 for laplace smoothing}
+\For{$epoch \leftarrow 1 .. m$}
+\State 
+\State //Active
+\If{prob<$\eta_1$} \Comment{Active sample every few epochs}
+\State sample $\delta_1 \sim  \mathcal{N}(0,\alpha e^{-\beta | A | })$ \Comment{shrinking noise}
+\State $\tau' \leftarrow \sigma(\sigma^{-1}(\tau)+\delta_1)$ \Comment{noised threshold}
+\State $i \leftarrow argmin_{i \in E \setminus A} \{ abs(P_{max}(i) - \tau')\}$ \Comment{Pick example to label}
+\State $Y_i \leftarrow \mathcal{O}(i)$ \Comment{Query oracle for label}
+\State $A = A \cup \left\{ i \right\}$ \Comment{closest example to noised threshold}
+\State $pos \leftarrow (1-\gamma)\mathbbm{1}\{predict(i)=Y_i\} + \gamma pos$
+\State $neg \leftarrow (1-\gamma)\mathbbm{1}\{predict(i) \neq Y_i\} + \gamma neg$
+\State $\tau = \sigma(\sigma^{-1}(\tau) - \mathrm{ log}(\frac{pos}{neg}))$ \Comment{adjust threshold}
+\EndIf
+\State 
+\State //Semisupervised
+\State $\tau_s \leftarrow \sigma(\sigma^{-1}(\tau)+\delta_2)$
+\State $B \leftarrow \left\{b \mid model(b)> \tau_s \right\}$ 
+\For{$i \leftarrow B$}
+\State $Y_i \leftarrow predict_{\theta} (i)$
+\EndFor
+\State
+\State //Model Update
+\State $a \leftarrow \textrm{balanced-sample}(A,40)$
+\State $b \leftarrow \textrm{balanced-sample}(B,40)$
+\State $\theta \leftarrow \textrm{minibatch-fit}(X,Y,a,b)$
+\State
+\State //Rescore
+\State Update model scores $\{ P_i \mid i \in \textrm{uniform-sample}(E,\eta_2) \}$
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+Walking through the algorithm, we see that it follows the general form outlined in the oracle earlier.  Variables are instantiated, then a process of sampling/labeling, semisupervised learning, model training, and scoring runs in minibatches.  
+
+The core of this algorithm is striking a balance in the progress of each of the component parts.  The components to balance are the amounts of model updating, rescoring, and active sampling per epoch.  The amount of semisupervised learning is really controlled by active calibration, and an apriori-set parameter $\delta_3$ (see derivation above).  
+
+The rates of progress are controlled by the parameters $\eta_1$,$\eta_2$, and the number 40 in the model update section.  Since it's the relative quantities of parameters that matter most, and somewhere in the range of 40-100 is a generally-recognized-good parameter setting for MNIST minibatch-sizes, we fix the MNIST minibatch size first.  
+
+This leaves us with $\eta_1$ and $\eta_2$.  As with other parameters we've discussed, it's easy to come up with a very reasonable apriori number that will give solid performance.  Starting with the labeling probability: we must leave time for the model to converge, and semi-supervised labels to propagate, before.  The minimum time we could imagine giving there is 10 iterations, hence 0.1.  
+
+The point of this algorithm is for it to be efficient, and so finding the minimum amount of re-scoring to get results.  A sampling fraction of 0.1 is the simplest one could imagine, and in expectation re-scores 95\% of the dataset for every 3 active labels.  We tried 0.01 as well, but empirical results were significantly worse.  
+
+
+
+\section{Experiments}
+The core experiment we ran was on MNIST, using a well-known deep-network architecture detailed above.  Data was collected from these experiments to compare the accuracy per label of algorithm variants, and evaluate the effectiveness of the above calibration algorithm.  
+
+\subsection{Calibration and sampling}
+\begin{figure}[h]
+  \center 
+  \includegraphics[scale=0.5]{adaptive-threshold}
+  \includegraphics[scale=0.5]{calibration}
+  \caption{Left: Adaptive threshold over number of labels queried.  Right:empirical fraction of selected labels, with adaptive thresholding, that are positive}
+\end{figure}
+\subsection{Held-out Accuracy}
+\begin{figure}[h]
+  \center 
+  \includegraphics[scale=0.5]{mnist-results}
+  \caption{Performance of various active-semisupervised algorithm variants.  These follow the naming convention <active selector>-<semisupervised selector>}
+\end{figure}
+
+What was 
+
+
+Given this framework, what is left for 
+
+The above framework supports a
+While the above framework does restrict the learning algorithm and implementation
+The restrictions on our learning algorithm are only then that it can be efficiently trained in mini-batches, 
+
+it has sufficient confidence in to use for semi-supervised learning
+objective is to simultaneously minimize the number of labels request
+we s with any active learning algorithm, the objective is to 
+
+FUPS: 
+- theoretical work on this adaptive calibration algorithm
+- deadling with unbalanced sets
+
+\section{Conclusion}
+Future work would probably include transfer learning, more datasets (text), 
+We expect performance to be more significant for highly-skewed classes.  
+Theoretical work on adaptive calibration (right now it's rough).  Regret bounds, ...
+It might be interesting in future work to investigate actively re-scoring, based on current score.  
+<transfer learning?>
+\section*{References}
+
+\small
+
+[1] Lee, Dong-Hyun. "Pseudo-label: The simple and efficient semi-supervised learning method for deep neural networks." Workshop on Challenges in Representation Learning, ICML. Vol. 3. 2013.
+
+[2] Sutton, Richard S. "Learning to predict by the methods of temporal differences." Machine learning 3.1 (1988): 9-44.
+
+[3] Weston, Jason, et al. "Deep learning via semi-supervised embedding." Neural Networks: Tricks of the Trade. Springer Berlin Heidelberg, 2012. 639-655.
+
+[4] Ganti, Ravi, and Alexander Gray. "Upal: Unbiased pool based active learning." arXiv preprint arXiv:1111.1784 (2011).
+
+[5] Zhu, Xiaojin, John Lafferty, and Zoubin Ghahramani. "Combining active learning and semi-supervised learning using gaussian fields and harmonic functions." ICML 2003 workshop on the continuum from labeled to unlabeled data in machine learning and data mining. Vol. 3. 2003.
+
+[6] McCallumzy, Andrew Kachites, and Kamal Nigamy. "Employing EM and pool-based active learning for text classification." Proc. International Conference on Machine Learning (ICML). 1998.
+
+[7] Abadi, Martın, et al. "TensorFlow: Large-scale machine learning on heterogeneous systems, 2015." Software available from tensorflow. org.
+
+[8] Zhu, Xiaojin. "Semi-supervised learning literature survey." (2005).
+
+[9] Pan, Sinno Jialin, and Qiang Yang. "A survey on transfer learning." Knowledge and Data Engineering, IEEE Transactions on 22.10 (2010): 1345-1359.
+
+[10] Bengio, Yoshua. "Deep learning of representations for unsupervised and transfer learning." Unsupervised and Transfer Learning Challenges in Machine Learning 7 (2012): 19.
+
+
+
+
+
+
+
+\end{document}
 
 
 \begin{algorithm}
@@ -103,48 +323,63 @@ In this paper we lay out a simple, model-agnostic and computationally efficient 
 \end{algorithmic}
 \end{algorithm}
 
-\section{Minibatch Active Semi-supervised Learning}
-In this section, we introduce an oracle abstraction for a class of active pool-based semi-supervised learning algorithms, and a few classes of algorithms to interface with such an oracle.  
-
-\subsection{A Simple Active Semi-Supervised Oracle}
-Here we define an oracle setup in which to implement our active, semi-supervised learning algorithm.  We assume that we're given a pool of inputs, each $x \in \mathbb{R}^{d}$, and can request labels each $y\in\{0..c\}$.  As active learning frameworks are typically structured, the dual objectives are to train and optimize some objective over the population dataset, while minimizing the number of labels requested.  
-
-In keeping this learning algorithm simple, we restrict it to run as follows.  The algorithm must run as a sequence of epochs.  In each epoch, the algorithm:
-\begin{enumerate}
-\item Produces a set of examples to request labels for
-\item Produces a set of example/label pairs from model would output with sufficient confidence
-\item Bootstrap samples a minibatch from the semisupervised pseudo-labels and active labels collected so far.
-\item Re-scores a small, random subset of examples
-\end{enumerate}
-
-This approach then strikes a balance between pool-based and streaming active learning algorithms.  As is normally the case, if we assume scoring / retraing makes up the bulk of runtime for iterative learning algorithms.  From the approach above, each epoch only need score a small sample, re-train on a minibatch, and label a few cases.  Ensuring latency of requesting the next label is often important for collecting labels in real-time labels.  
-
-\subsection{Deep Architecture}
-The point of this approach is for the example selection and semi-supervised labeling to be agnostic to the supervised model architecture chosen.  For evaluation on MNIST we thus chose a commonly used architecture.  The 28x28 input images are fed into a 32-bank of 5x5 convolutional features, rectified linear and 2x2 max pooling layers, then 5x5x32 convolution with 32 features, relu/max pooling, and finally a 2-level fully connected network with a 1014-variable hidden layer.  
-
-\subsection{A Specification of the Active Learning Algorithm}
-The active learning algorithm we use is given 
-
-For the active-label selection, we show 
-
-\subsection{A Full Algorithm for Minibatch Active Semi-Supervised Learning}
-
-What was 
 
 
-Given this framework, what is left for 
 
-The above framework supports a
-While the above framework does restrict the learning algorithm and implementation
-The restrictions on our learning algorithm are only then that it can be efficiently trained in mini-batches, 
 
-it has sufficient confidence in to use for semi-supervised learning
-objective is to simultaneously minimize the number of labels request
-we s with any active learning algorithm, the objective is to 
 
-FUPS: 
-- theoretical work on this adaptive calibration algorithm
-- deadling with unbalanced sets
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 $$x \in \mathbb{R}^d$$
 
@@ -496,55 +731,3 @@ Note that \verb+amsfonts+ is automatically loaded by the
 
 If your file contains type 3 fonts or non embedded TrueType fonts, we
 will ask you to fix it.
-
-\subsection{Margins in \LaTeX{}}
-
-Most of the margin problems come from figures positioned by hand using
-\verb+\special+ or other commands. We suggest using the command
-\verb+\includegraphics+ from the \verb+graphicx+ package. Always
-specify the figure width as a multiple of the line width as in the
-example below:
-\begin{verbatim}
-   \usepackage[pdftex]{graphicx} ...
-   \includegraphics[width=0.8\linewidth]{myfile.pdf}
-\end{verbatim}
-See Section 4.4 in the graphics bundle documentation
-(\url{http://mirrors.ctan.org/macros/latex/required/graphics/grfguide.pdf})
-
-A number of width problems arise when \LaTeX{} cannot properly
-hyphenate a line. Please give LaTeX hyphenation hints using the
-\verb+\-+ command when necessary.
-
-\subsubsection*{Acknowledgments}
-
-Use unnumbered third level headings for the acknowledgments. All
-acknowledgments go at the end of the paper. Do not include
-acknowledgments in the anonymized submission, only in the final paper.
-
-\section*{References}
-
-References follow the acknowledgments. Use unnumbered first-level
-heading for the references. Any choice of citation style is acceptable
-as long as you are consistent. It is permissible to reduce the font
-size to \verb+small+ (9 point) when listing the references. {\bf
-  Remember that you can use a ninth page as long as it contains
-  \emph{only} cited references.}
-\medskip
-
-\small
-
-[1] Alexander, J.A.\ \& Mozer, M.C.\ (1995) Template-based algorithms
-for connectionist rule extraction. In G.\ Tesauro, D.S.\ Touretzky and
-T.K.\ Leen (eds.), {\it Advances in Neural Information Processing
-  Systems 7}, pp.\ 609--616. Cambridge, MA: MIT Press.
-
-[2] Bower, J.M.\ \& Beeman, D.\ (1995) {\it The Book of GENESIS:
-  Exploring Realistic Neural Models with the GEneral NEural SImulation
-  System.}  New York: TELOS/Springer--Verlag.
-
-[3] Hasselmo, M.E., Schnell, E.\ \& Barkai, E.\ (1995) Dynamics of
-learning and recall at excitatory recurrent synapses and cholinergic
-modulation in rat hippocampal region CA3. {\it Journal of
-  Neuroscience} {\bf 15}(7):5249-5262.
-
-\end{document}
