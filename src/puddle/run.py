@@ -46,8 +46,8 @@ for ix in dataset_model_confs:
     dataset_name,model_name = ix
     df_selectors = df.loc[ix]
     selector_names = list(set(df_selectors.index))
-    plt.figure(figsize=(5,5))
-    plt.title('dataset %s model %s'%(dataset_name,model_name))
+    plt.figure(figsize=(7,6))
+    plt.title('dataset=%s model=%s'%(dataset_name,model_name))
     plt.xlabel('fraction of labels')
     plt.ylabel('f1 score')
     plt.xlim([-0.1,1.1])
@@ -60,7 +60,16 @@ for ix in dataset_model_confs:
     for selector_name in selector_names:
         df_experiment = df_selectors.loc[selector_name]
         plt.plot(df_experiment['train_fraction'],df_experiment['f1'],label=selector_name)
+    ax = plt.gca()
+    leg = plt.legend(loc = 'upper right')
+    bb = leg.get_bbox_to_anchor().inverse_transformed(ax.transAxes)
+    # Change to location of the legend.
+    xOffset = 0.2
+    bb.x0 += xOffset
+    bb.x1 += xOffset
+    leg.set_bbox_to_anchor(bb, transform = ax.transAxes)
     fig_path = 'plots/%s-%s.png'%(dataset_name,model_name)
+    plt.tight_layout()
     plt.savefig(os.path.join('results',fig_path))
     plt.clf()
     html_overview += '<h3>%s, %s</h3><img src="%s">'%(dataset_name,model_name,fig_path)
