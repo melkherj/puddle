@@ -1,12 +1,56 @@
-# Results
-Check out these [plots comparing active learning algorithms](results/outline.html)
+# Benchmarking Pool-Based Active Learning
+Check out these [plots comparing active learning algorithms](results/overview.html)
 
-# Re-running
-Run:
+
+#Results
+
+See below plots
+
+
+20-NewsGroups
+-------------
+![20newsgroups](results/plots/20newsgroups_vectorized-logistic_regression.png)
+
+Boston
+-------------
+![boston](results/plots/boston-logistic_regression.png)
+
+California Housing
+------------------
+![california_housing](results/plots/california_housing-logistic_regression.png)
+
+
+
+
+# Install
+- Clone the repo
+
+(We assume you're on python3 anaconda)
+
+
+# Running
+To run the active learning evaluation, type:
 
     ./run.sh
 
-We assume you're on python3 anaconda
+# Pushing a New Selector / New Model
+
+Every active learning selector must expose a single function *next_indices*, in order to 
+work properly with the benchmarking tests. 
+
+```python
+class RandomSelector:
+    """
+    
+    """
+    def next_indices(self,X,ixs,Y_sub,model,n_ixs=1):
+        n = X.shape[0]
+        remaining_ixs = list(set(range(n)) - set(ixs))
+        n_to_sample = min(n_ixs,len(remaining_ixs))
+        return random.sample(remaining_ixs,n_to_sample)
+
+```
+
 
 # What is this
 Goal of puddle is to provide:

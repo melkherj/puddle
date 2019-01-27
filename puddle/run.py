@@ -1,13 +1,14 @@
-import numpy as np
 from .active_evaluate import active_evaluate
-from .model_selectors.simple import simple_selectors
+from .model_selectors import selectors
 from .models.sklearn_simple import all_models
 from .datasets.sklearn_datasets import classification_datasets
-import json
 import pandas as pd
 import itertools
 import matplotlib.pyplot as plt
 import os
+import logging
+logging.basicConfig(filename='evaluation.log',level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 labels_per_epoch = 10
 
@@ -15,17 +16,22 @@ all_datasets = classification_datasets()
 
 #(dataset,model,selector)
 experiments = list(itertools.product(
-    all_datasets.items(),
-    all_models.items(),
-    simple_selectors.items()))
+                                    all_datasets.items(),
+                                    all_models.items(),
+                                    selectors.items()
+                                    )
+                   )
 
+logger.info("RUNNING EXPERIMENTS:")
+logger.info(experiments)
 # Run Experiments
 all_metrics = []
-for (dataset_name,(X,Y)),(model_name,model),(selector_name,selector) in experiments:
+for (dataset_name,(X,Y)),(model_name, model),(selector_name, selector) in experiments:
     print('evaluating dataset/model/selector: ',dataset_name,model_name,selector_name,'...')
+    logger.info('evaluating dataset/model/selector: ',dataset_name,model_name,selector_name,'...')
     #TODO don't hardcode epochs and number of examples per epoch
     epochs = len(Y)//labels_per_epoch
-    metrics_by_epoch = active_evaluate(X,Y,model,selector,epochs,labels_per_epoch)
+    metrics_by_epoch = active_evaluate(X, Y, model, selector, epochs, labels_per_epoch)
     for metric in metrics_by_epoch:
         metric['dataset'] = dataset_name
         metric['model'] = model_name
