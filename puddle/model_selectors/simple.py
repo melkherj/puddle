@@ -19,7 +19,6 @@ class RandomSelector:
         :param n_ixs: The number of 'steps ahead' to look
         :return:
         """
-        logger.info("Random Selector call: ixs={}, mode={}".format(len(ixs), model))
         n = X.shape[0]
         remaining_ixs = list(set(range(n)) - set(ixs))
         n_to_sample = min(n_ixs,len(remaining_ixs))
@@ -28,7 +27,6 @@ class RandomSelector:
 
 class UncertaintySelector:
     def next_indices(self,X,ixs,Y_sub,model,n_ixs=1):
-        logger.info("Uncertainy Selector call: ixs={}, mode={}".format(len(ixs), model))
         P = model.predict_proba(X)[:,1]
         margin = np.abs(P-0.5)
         big_margin = 1000.
@@ -67,8 +65,8 @@ class FisherSelector:
         logger.info('Calculating incremental information gain for every X...')
         info_gains = [np.log(np.linalg.det(prior_fisher + M)) - prior_info for M in matrices]
         logger.info('Sorting...')
-        chosen_ixs = np.argsort(info_gains)[:n_ixs]
-        return list(set(chosen_ixs)-set(ixs))
+        chosen_ixs = np.argsort(info_gains)#[:n_ixs]
+        return list(set(chosen_ixs)-set(ixs))[:n_ixs]
 
 
     @classmethod
