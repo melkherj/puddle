@@ -1,12 +1,40 @@
-# Results
+# Benchmarking Pool-Based Active Learning
 Check out these [plots comparing active learning algorithms](results/outline.html)
 
-# Re-running
-Run:
+
+#Results
+
+
+
+20-NewsGroups
+-------------
+![20newsgroups](results/plots/20newsgroups_vectorized-logistic_regression.png)
+
+Boston
+-------------
+![boston](results/plots/boston-logistic_regression.png)
+
+California Housing
+------------------
+![california_housing](results/plots/california_housing-logistic_regression.png)
+
+
+
+
+# Install
+- Clone the repo
+
+(We assume you're on python3 anaconda)
+
+
+# Running
+To run the active learning evaluation, type:
 
     ./run.sh
 
-We assume you're on python3 anaconda
+# Pushing a new algorithm
+
+
 
 # What is this
 Goal of puddle is to provide:
