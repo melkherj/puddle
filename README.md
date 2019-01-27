@@ -1,9 +1,10 @@
 # Benchmarking Pool-Based Active Learning
-Check out these [plots comparing active learning algorithms](results/outline.html)
+Check out these [plots comparing active learning algorithms](results/overview.html)
 
 
 #Results
 
+See below plots
 
 
 20-NewsGroups
@@ -32,8 +33,23 @@ To run the active learning evaluation, type:
 
     ./run.sh
 
-# Pushing a new algorithm
+# Pushing a New Selector / New Model
 
+Every active learning selector must expose a single function *next_indices*, in order to 
+work properly with the benchmarking tests. 
+
+```python
+class RandomSelector:
+    """
+    
+    """
+    def next_indices(self,X,ixs,Y_sub,model,n_ixs=1):
+        n = X.shape[0]
+        remaining_ixs = list(set(range(n)) - set(ixs))
+        n_to_sample = min(n_ixs,len(remaining_ixs))
+        return random.sample(remaining_ixs,n_to_sample)
+
+```
 
 
 # What is this
