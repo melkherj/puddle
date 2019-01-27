@@ -30,6 +30,8 @@ def active_evaluate(X,Y,model,selector,epochs,labels_per_epoch,test_size=0.1):
     selected_ixs = [] #ordered list of indices we've asked for human labels from so far
     metrics_by_epoch = []
     for epoch in range(epochs):
+        if epochs<=20 or epoch%(epochs//20)==0:
+            print('%d/%d epochs...'%(epoch,epochs))
         next_ixs = selector.next_indices(X_train,selected_ixs,Y_train[selected_ixs],model,
             n_ixs=labels_per_epoch)
         assert len(set(next_ixs)&set(selected_ixs)) == 0 #must be new indices

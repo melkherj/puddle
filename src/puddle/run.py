@@ -24,7 +24,7 @@ all_metrics = []
 for (dataset_name,(X,Y)),(model_name,model),(selector_name,selector) in experiments:
     print('evaluating dataset/model/selector: ',dataset_name,model_name,selector_name,'...')
     #TODO don't hardcode epochs and number of examples per epoch
-    epochs = len(X)//labels_per_epoch
+    epochs = len(Y)//labels_per_epoch
     metrics_by_epoch = active_evaluate(X,Y,model,selector,epochs,labels_per_epoch)
     for metric in metrics_by_epoch:
         metric['dataset'] = dataset_name

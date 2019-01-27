@@ -2,6 +2,5 @@ MNIST_DATA
 **/*.pyc
 **/*.swp
 **/__pycache__
-results
 active_conf.json
 .ipynb_checkpoints

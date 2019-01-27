@@ -1,3 +1,13 @@
+# Results
+Check out these [plots comparing active learning algorithms](results/outline.html)
+
+# Re-running
+Run:
+
+    ./run.sh
+
+We assume you're on python3 anaconda
+
 # What is this
 Goal of puddle is to provide:
 * an interface for implementing model-agnostic pool-based example-selector algorithms, for pool-based classification tasks
