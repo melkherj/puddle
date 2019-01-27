@@ -6,4 +6,4 @@ MNIST_DATA
 evaluation.log
 active_conf.json
 .ipynb_checkpoints
-.idea/*
+.idea/
