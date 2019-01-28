@@ -7,12 +7,15 @@ import itertools
 import matplotlib.pyplot as plt
 import os
 import logging
+
 logging.basicConfig(filename='evaluation.log',level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-labels_per_epoch = 10
 
-all_datasets = classification_datasets()
+sample_size=10**7
+epochs=100
+labels_per_epoch = 5
+all_datasets = classification_datasets(downsample_size=sample_size)
 
 #(dataset,model,selector)
 experiments = list(itertools.product(
@@ -29,8 +32,9 @@ all_metrics = []
 for (dataset_name,(X,Y)),(model_name, model),(selector_name, selector) in experiments:
     print('evaluating dataset/model/selector: ',dataset_name,model_name,selector_name,'...')
     logger.info('evaluating dataset/model/selector: ',dataset_name,model_name,selector_name,'...')
-    #TODO don't hardcode epochs and number of examples per epoch
-    epochs = len(Y)//labels_per_epoch
+
+    # TODO don't hardcode epochs and number of examples per epoch
+    # epochs = len(Y)//labels_per_epoch
     metrics_by_epoch = active_evaluate(X, Y, model, selector, epochs, labels_per_epoch)
     for metric in metrics_by_epoch:
         metric['dataset'] = dataset_name
@@ -49,32 +53,34 @@ for fname in os.listdir('results/plots'):
     os.remove(os.path.join('results/plots',fname))
 html_overview = '<html><body><h1>Data Efficiency Results by Model/Dataset</h1>'
 for ix in dataset_model_confs:
-    dataset_name,model_name = ix
+    dataset_name, model_name = ix
     df_selectors = df.loc[ix]
     selector_names = list(set(df_selectors.index))
-    plt.figure(figsize=(7,6))
-    plt.title('dataset=%s model=%s'%(dataset_name,model_name))
-    plt.xlabel('fraction of labels')
+    plt.figure(figsize=(7, 6))
+    plt.title('dataset=%s model=%s' % (dataset_name, model_name))
+    plt.xlabel('number of training labels')
     plt.ylabel('f1 score')
-    plt.xlim([-0.1,1.1])
-    plt.ylim([-0.1,1.1])
-    ax_line_args = {'color':'black','linewidth':0.3,'linestyle':'dashed'}
-    plt.axvline(x=0.0,**ax_line_args)
-    plt.axvline(x=1.0,**ax_line_args)
-    plt.axhline(y=0.0,**ax_line_args)
-    plt.axhline(y=1.0,**ax_line_args)
+    #     plt.xlim([-0.1, 1.1])
+    #     plt.ylim([-0.1, 1.1])
+    ax_line_args = {'color': 'black', 'linewidth': 0.3, 'linestyle': 'dashed'}
+    plt.axvline(x=0.0, **ax_line_args)
+    plt.axvline(x=1.0, **ax_line_args)
+    plt.axhline(y=0.0, **ax_line_args)
+    plt.axhline(y=1.0, **ax_line_args)
+
     for selector_name in selector_names:
         df_experiment = df_selectors.loc[selector_name]
-        plt.plot(df_experiment['train_fraction'],df_experiment['f1'],label=selector_name)
+        plt.plot(df_experiment['train_size'], df_experiment['f1'], label=selector_name)
+
     ax = plt.gca()
-    leg = plt.legend(loc = 'upper right')
+    leg = plt.legend(loc='upper right')
     bb = leg.get_bbox_to_anchor().inverse_transformed(ax.transAxes)
     # Change to location of the legend.
     xOffset = 0.2
     bb.x0 += xOffset
     bb.x1 += xOffset
-    leg.set_bbox_to_anchor(bb, transform = ax.transAxes)
-    fig_path = 'plots/%s-%s.png'%(dataset_name,model_name)
+    leg.set_bbox_to_anchor(bb, transform=ax.transAxes)
+    fig_path = 'plots/%s-%s.png' % (dataset_name, model_name)
     plt.tight_layout()
     plt.savefig(os.path.join('results',fig_path))
     plt.clf()
