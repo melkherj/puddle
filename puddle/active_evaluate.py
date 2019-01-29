@@ -65,7 +65,7 @@ def active_evaluate(X, Y, model, selector, epochs, labels_per_epoch, bootstrap_s
         # selected_ixs = random.sample(set(np.arange(X.shape[0])), bootstrap_size) +
         model.fit(X[selected_ixs], Y[selected_ixs])  # pre-fit
     except:
-        pass
+        return pd.DataFrame()
     for epoch in range(epochs):
         if epochs <= 20 or epoch % (epochs//20) == 0:
             print('Batch {}, bootstrap {} -- {}/{} epochs...'.format(batch_info, batch_run, epoch, epochs))

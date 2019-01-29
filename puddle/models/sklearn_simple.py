@@ -3,5 +3,5 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 
 all_models = {
-    'logistic_regression':LogisticRegression()
+    'logistic_regression':LogisticRegression(n_jobs=1)
 }

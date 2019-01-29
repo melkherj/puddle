@@ -6,6 +6,10 @@ Check out these [plots comparing active learning algorithms](results/overview.ht
 
 See below plots
 
+Overall Benchmarks
+--------------------
+![overall_plot](results/plots/overall_plot.png)
+
 
 20-NewsGroups
 -------------
