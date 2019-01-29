@@ -20,8 +20,6 @@ California Housing
 ![california_housing](results/plots/california_housing-logistic_regression.png)
 
 
-
-
 # Install
 - Clone the repo
 
@@ -35,13 +33,15 @@ To run the active learning evaluation, type:
 
 # Pushing a New Selector / New Model
 
-Every active learning selector must expose a single function *next_indices*, in order to 
-work properly with the benchmarking tests. 
+Every active learning selector must expose a single function *next_indices* in order to 
+work properly with the benchmarking tests. This function should return a list of length *n_ixs*
 
 ```python
 class RandomSelector:
     """
-    
+        Returns random indices for sampling based on the
+        data matrix X, previously sampled indices ixs,
+        previously sampled labels Y_sub, and classifier model.
     """
     def next_indices(self,X,ixs,Y_sub,model,n_ixs=1):
         n = X.shape[0]

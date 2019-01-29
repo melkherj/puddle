@@ -1,5 +1,5 @@
-from .active_evaluate import active_evaluate
-from .model_selectors import selectors
+from .active_evaluate import active_evaluate, run_experiment
+from .model_selectors.simple import simple_selectors
 from .models.sklearn_simple import all_models
 from .datasets.sklearn_datasets import classification_datasets
 import pandas as pd
@@ -7,50 +7,50 @@ import itertools
 import matplotlib.pyplot as plt
 import os
 import logging
-
+import multiprocessing
+from functools import partial
+# LOGGING
 logging.basicConfig(filename='evaluation.log',level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-
-sample_size=10**7
-epochs=100
+# TODO identify these args in command line at run time
+sample_size=10**5
+epochs=20
 labels_per_epoch = 5
+n_ensemble=5
 all_datasets = classification_datasets(downsample_size=sample_size)
 
-#(dataset,model,selector)
-experiments = list(itertools.product(
-                                    all_datasets.items(),
-                                    all_models.items(),
-                                    selectors.items()
-                                    )
-                   )
+# List of all experiments
+experiments = itertools.product(
+                                all_datasets.items(),
+                                all_models.items(),
+                                simple_selectors.items(),
+                                range(n_ensemble)
+                                )
 
 logger.info("RUNNING EXPERIMENTS:")
-logger.info(experiments)
 # Run Experiments
 all_metrics = []
-for (dataset_name,(X,Y)),(model_name, model),(selector_name, selector) in experiments:
-    print('evaluating dataset/model/selector: ',dataset_name,model_name,selector_name,'...')
-    logger.info('evaluating dataset/model/selector: ',dataset_name,model_name,selector_name,'...')
+file_init = True
 
-    # TODO don't hardcode epochs and number of examples per epoch
-    # epochs = len(Y)//labels_per_epoch
-    metrics_by_epoch = active_evaluate(X, Y, model, selector, epochs, labels_per_epoch)
-    for metric in metrics_by_epoch:
-        metric['dataset'] = dataset_name
-        metric['model'] = model_name
-        metric['selector'] = selector_name
-        all_metrics.append(metric)
-df = pd.DataFrame(all_metrics)
+pool = multiprocessing.Pool(multiprocessing.cpu_count())
+run_my_experiment = partial(run_experiment, epochs=epochs, labels_per_epoch=labels_per_epoch)
+all_metrics = pool.map(run_my_experiment, experiments)
+pool.close()
+pool.join()
+df = pd.concat(all_metrics)
+df.to_csv('results/all_metrics.csv')
+
 
 # Generate and Export Visualizations
-df.to_csv('results/all_metrics.csv')
+# Piecewise plots
 df = df.set_index(['dataset','model','selector'])
-
 dataset_model_confs = list(set((conf[:2] for conf in df.index)))
+
 # nuke all previous plots
 for fname in os.listdir('results/plots'):
-    os.remove(os.path.join('results/plots',fname))
+    os.remove(os.path.join('results/plots', fname))
+
 html_overview = '<html><body><h1>Data Efficiency Results by Model/Dataset</h1>'
 for ix in dataset_model_confs:
     dataset_name, model_name = ix
@@ -70,7 +70,12 @@ for ix in dataset_model_confs:
 
     for selector_name in selector_names:
         df_experiment = df_selectors.loc[selector_name]
-        plt.plot(df_experiment['train_size'], df_experiment['f1'], label=selector_name)
+        agg = df_experiment.groupby(['train_size']).agg({'f1': ['mean', 'std']})
+        agg.columns = ['_'.join(col).strip() for col in agg.columns.values]
+        agg = agg.reset_index()
+        agg['f1_upper'] = agg["f1_mean"] + agg['f1_std'].fillna(0)
+        agg['f1_lower'] = agg["f1_mean"] - agg['f1_std'].fillna(0)
+        plt.fill_between(agg['train_size'], agg['f1_lower'], y2=agg['f1_upper'], label=selector_name, alpha=0.2)
 
     ax = plt.gca()
     leg = plt.legend(loc='upper right')
@@ -88,3 +93,19 @@ for ix in dataset_model_confs:
 html_overview += '</body></html>'
 with open('results/overview.html','w') as f:
     f.write(html_overview)
+
+# overall plot
+import seaborn as sns
+df = df.reset_index()
+agg = df.groupby(['dataset', 'model', 'selector', 'train_size']).agg({'f1':['mean', 'std']})
+agg.columns = ['_'.join(col).strip() for col in agg.columns.values]
+agg['f1_upper'] = agg["f1_mean"]+agg['f1_std'].fillna(0)
+agg['f1_lower'] = agg["f1_mean"]-agg['f1_std'].fillna(0)
+agg = agg.reset_index()
+
+plt.figure(figsize=(8,8))
+g = sns.FacetGrid(col='dataset', hue='selector', col_wrap=3, data=agg)
+g.map(plt.fill_between, 'train_size', 'f1_lower', 'f1_upper', alpha=0.4)
+plt.legend(loc='upper right')
+plt.savefig('results/plots/overall_plot.png')
+

@@ -3,6 +3,8 @@ import numpy as np
 from scipy.special import logit
 from scipy.sparse import issparse
 import logging
+from sklearn.linear_model import LogisticRegression
+from sklearn.decomposition import TruncatedSVD, PCA
 logger = logging.getLogger(__name__)
 
 class RandomSelector:
@@ -46,26 +48,23 @@ class FisherSelector:
         :param n_ixs: The number of 'steps ahead' to look
         :return:
         """
-        # If feature space too large, default to uncertainty
-        if X.shape[1] > 500:
-                P = model.predict_proba(X)[:, 1]
-                margin = np.abs(P - 0.5)
-                big_margin = 1000.
-                margin[ixs] = big_margin  # don't pick any indices we've already picked
-                chosen_ixs = np.argsort(margin)[:n_ixs]
-                return list(set(chosen_ixs) - set(ixs))
-        logger.info("Fisher Selector call: ixs={}, X.shape={}, mode={}".format(len(ixs), X.shape, model))
+        # If feature space too large, decompose feature space to 50 features
+        if X.shape[1] > 100:
+            if issparse(X):
+                X = TruncatedSVD(n_components=50).fit_transform(X)
+            else:
+                X = PCA(n_components=50).fit_transform(X)
 
-        logger.info('Calculating prior information matrix...')
+            logger.info('Feature Space Large, overwriting model with internal Logistic Regression...')
+            model = LogisticRegression()
+            model.fit(X[ixs], Y_sub)
+
         prior_fisher = self.get_fisher_information_matrix(model, X[ixs])
-        logger.info('Calculating prior information...')
         prior_info = np.linalg.det(prior_fisher)
-        logger.info('Calculating fisher information matrices for every X...')
         matrices = [self.get_fisher_information_matrix(model, x) for x in X]
-        logger.info('Calculating incremental information gain for every X...')
         info_gains = [np.log(np.linalg.det(prior_fisher + M)) - prior_info for M in matrices]
-        logger.info('Sorting...')
-        chosen_ixs = np.argsort(info_gains)#[:n_ixs]
+        chosen_ixs = np.argsort(info_gains)
+
         return list(set(chosen_ixs)-set(ixs))[:n_ixs]
 
 
@@ -82,7 +81,8 @@ class FisherSelector:
         D_ii = 2.0 * (1.0 + np.cosh(logit(model.predict_proba(X)[:, 1])))  # N array
         D_ii2 = (X / D_ii[:, np.newaxis]).T
         F_ij = np.dot(D_ii2, X)
-        # F_ij += self.C * np.diag(np.ones(F_ij.shape[0]))  # Prior Regularization
+        reg = model.C if hasattr(model, 'C') else 1
+        F_ij += reg * np.diag(np.ones(F_ij.shape[0]))  # Prior Regularization
         return F_ij
 
 
