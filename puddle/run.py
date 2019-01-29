@@ -14,10 +14,10 @@ logging.basicConfig(filename='evaluation.log',level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # TODO identify these args in command line at run time
-sample_size=10**5
-epochs=20
+sample_size=10**6
+epochs=50
 labels_per_epoch = 5
-n_ensemble=5
+n_ensemble=10
 all_datasets = classification_datasets(downsample_size=sample_size)
 
 # List of all experiments

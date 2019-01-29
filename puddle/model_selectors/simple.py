@@ -56,7 +56,7 @@ class FisherSelector:
                 X = PCA(n_components=50).fit_transform(X)
 
             logger.info('Feature Space Large, overwriting model with internal Logistic Regression...')
-            model = LogisticRegression()
+            model = LogisticRegression(n_jobs=1)
             model.fit(X[ixs], Y_sub)
 
         prior_fisher = self.get_fisher_information_matrix(model, X[ixs])

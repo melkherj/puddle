@@ -48,7 +48,7 @@ def classification_datasets(downsample_size=None):
         'boston': sklearn_binarize_by_percentile(load_boston(), downsample_size=downsample_size),
         'california_housing': sklearn_binarize_by_percentile(fetch_california_housing(),
             downsample_size=downsample_size),
-        # '20newsgroups_vectorized': sklearn_binarize_by_percentile(fetch_20newsgroups_vectorized(),
-        #     downsample_size=downsample_size)
+        '20newsgroups_vectorized': sklearn_binarize_by_percentile(fetch_20newsgroups_vectorized(),
+            downsample_size=downsample_size)
         }
     return datasets
