@@ -125,4 +125,4 @@ Goal of puddle is to provide:
 * https://github.com/erikbern/ann-benchmarks
 * burr settles active learning summary: http://burrsettles.com/pub/settles.activelearning.pdf
 * some active learning py implementations: https://github.com/davefernig/alp
-
+* LIBACT, an active learning library rspeare found (https://github.com/ntucllab/libact,  https://arxiv.org/pdf/1710.00379.pdf)
