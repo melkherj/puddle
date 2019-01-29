@@ -14,26 +14,23 @@ logging.basicConfig(filename='evaluation.log',level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # TODO identify these args in command line at run time
+
+# CONFIGURATIONS FOR RUNTIME
 sample_size=10**6
 epochs=50
 labels_per_epoch = 5
 n_ensemble=10
 n_cpus=4
-all_datasets = classification_datasets(downsample_size=sample_size)
 
 # List of all experiments
 experiments = itertools.product(
-                                all_datasets.items(),
+                                classification_datasets(downsample_size=sample_size).items(),
                                 all_models.items(),
                                 simple_selectors.items(),
                                 range(n_ensemble)
                                 )
 
-logger.info("RUNNING EXPERIMENTS:")
 # Run Experiments
-all_metrics = []
-file_init = True
-
 pool = multiprocessing.Pool(n_cpus)
 run_my_experiment = partial(run_experiment, epochs=epochs, labels_per_epoch=labels_per_epoch)
 all_metrics = pool.map(run_my_experiment, experiments)
@@ -95,7 +92,7 @@ html_overview += '</body></html>'
 with open('results/overview.html','w') as f:
     f.write(html_overview)
 
-# overall plot
+# Overall Plot
 import seaborn as sns
 df = df.reset_index()
 agg = df.groupby(['dataset', 'model', 'selector', 'train_size']).agg({'f1':['mean', 'std']})
