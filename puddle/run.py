@@ -18,6 +18,7 @@ sample_size=10**6
 epochs=50
 labels_per_epoch = 5
 n_ensemble=10
+n_cpus=4
 all_datasets = classification_datasets(downsample_size=sample_size)
 
 # List of all experiments
@@ -33,7 +34,7 @@ logger.info("RUNNING EXPERIMENTS:")
 all_metrics = []
 file_init = True
 
-pool = multiprocessing.Pool(multiprocessing.cpu_count())
+pool = multiprocessing.Pool(n_cpus)
 run_my_experiment = partial(run_experiment, epochs=epochs, labels_per_epoch=labels_per_epoch)
 all_metrics = pool.map(run_my_experiment, experiments)
 pool.close()

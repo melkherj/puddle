@@ -3,6 +3,7 @@ from sklearn.datasets import load_boston, load_iris, fetch_kddcup99, fetch_20new
 from sklearn.datasets.california_housing import fetch_california_housing
 import os, ssl
 import random
+from sklearn.datasets import make_classification
 
 # There's a bug on macs, this works around it
 # https://github.com/scikit-learn/scikit-learn/issues/10201
@@ -39,16 +40,30 @@ def kdd99_portsweep_tiny(size=10000):
     ixs = list(set(random.sample(range(len(X)),size))|set(portsweep_ixs))
     return X[ixs],Y[ixs]
 
+def sklearn_classification(downsample_size=10**4, weights=None):
+    X, Y = make_classification(n_samples=downsample_size, n_features=20,
+                               n_informative=4, n_redundant=3,
+                               n_clusters_per_class=2, weights=weights)
+    return X, Y
 
 def classification_datasets(downsample_size=None):
+    """
+
+    :param downsample_size:
+        The maximum number of points to
+    :return: (dict)
+        Dictionary of datasetnames (keys) and X,Y training set (values)
+    """
     datasets = {
 #        'iris': sklearn_binarize_by_percentile(load_iris()),
 #        'kdd99_tiny':kdd99_portsweep_tiny(),
-        'breast_cancer':breast_cancer(downsample_size=downsample_size),
-        'boston': sklearn_binarize_by_percentile(load_boston(), downsample_size=downsample_size),
-        'california_housing': sklearn_binarize_by_percentile(fetch_california_housing(),
-            downsample_size=downsample_size),
-        '20newsgroups_vectorized': sklearn_binarize_by_percentile(fetch_20newsgroups_vectorized(),
-            downsample_size=downsample_size)
+        'skewed_sklearn_10_to_1': sklearn_classification(downsample_size=downsample_size, weights=[0.9, 0.1]),
+        'skewed_sklearn_20_to_1': sklearn_classification(downsample_size=downsample_size, weights=[0.95, 0.05]),
+        # 'breast_cancer':breast_cancer(downsample_size=downsample_size),
+        # 'boston': sklearn_binarize_by_percentile(load_boston(), downsample_size=downsample_size),
+        # 'california_housing': sklearn_binarize_by_percentile(fetch_california_housing(),
+        #     downsample_size=downsample_size),
+        # '20newsgroups_vectorized': sklearn_binarize_by_percentile(fetch_20newsgroups_vectorized(),
+        #     downsample_size=downsample_size)
         }
     return datasets

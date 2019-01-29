@@ -7,3 +7,7 @@ evaluation.log
 active_conf.json
 .ipynb_checkpoints
 .idea/
+
+#Notebooks
+*.pynb
+*~
