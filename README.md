@@ -61,6 +61,8 @@ California Housing
 # Install
 - Clone the repo
 
+Run ./install.sh
+
 (We assume you're on python3 anaconda)
 
 

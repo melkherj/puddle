@@ -2,6 +2,7 @@ from .active_evaluate import active_evaluate, run_experiment
 from .model_selectors.simple import simple_selectors
 from .models.sklearn_simple import all_models
 from .datasets.sklearn_datasets import classification_datasets
+from .datasets.amazon_reviews_bert import get_amazon_bert_features_labels
 import pandas as pd
 import itertools
 import matplotlib.pyplot as plt
@@ -9,6 +10,7 @@ import os
 import logging
 import multiprocessing
 from functools import partial
+
 # LOGGING
 logging.basicConfig(filename='evaluation.log',level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -16,10 +18,12 @@ logger = logging.getLogger(__name__)
 # TODO identify these args in command line at run time
 sample_size=10**6
 epochs=50
-labels_per_epoch = 5
-n_ensemble=10
+labels_per_epoch = 10
+n_ensemble=5
 n_cpus=4
-all_datasets = classification_datasets(downsample_size=sample_size)
+sklearn_datasets = classification_datasets(downsample_size=sample_size)
+amazon_reviews_bert = {'amazon_reviews_bert': get_amazon_bert_features_labels() }
+all_datasets = {**sklearn_datasets, **amazon_reviews_bert}
 
 # List of all experiments
 experiments = itertools.product(

@@ -57,10 +57,10 @@ def active_evaluate(X, Y, model, selector, epochs, labels_per_epoch, bootstrap_s
 
     # TODO take the bootstrap outside of active_evaluate function
     metrics_by_epoch = []
-    positive_ixs = random.sample(set(np.where(Y)[0]), int(bootstrap_size/2)+1)
-    negative_ixs = random.sample(set(np.where(~Y)[0]), int(bootstrap_size/2)+1)
 
     try:
+        positive_ixs = random.sample(set(np.where(Y)[0]), int(bootstrap_size/2)+1)
+        negative_ixs = random.sample(set(np.where(~Y)[0]), int(bootstrap_size/2)+1)
         selected_ixs = positive_ixs + negative_ixs
         # selected_ixs = random.sample(set(np.arange(X.shape[0])), bootstrap_size) +
         model.fit(X[selected_ixs], Y[selected_ixs])  # pre-fit

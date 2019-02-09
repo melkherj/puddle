@@ -61,9 +61,9 @@ def classification_datasets(downsample_size=None):
         'skewed_sklearn_20_to_1': sklearn_classification(downsample_size=downsample_size, weights=[0.95, 0.05]),
         # 'breast_cancer':breast_cancer(downsample_size=downsample_size),
         # 'boston': sklearn_binarize_by_percentile(load_boston(), downsample_size=downsample_size),
-        # 'california_housing': sklearn_binarize_by_percentile(fetch_california_housing(),
-        #     downsample_size=downsample_size),
-        # '20newsgroups_vectorized': sklearn_binarize_by_percentile(fetch_20newsgroups_vectorized(),
-        #     downsample_size=downsample_size)
+         'california_housing': sklearn_binarize_by_percentile(fetch_california_housing(),
+             downsample_size=downsample_size),
+         '20newsgroups_vectorized': sklearn_binarize_by_percentile(fetch_20newsgroups_vectorized(),
+             downsample_size=downsample_size)
         }
     return datasets
